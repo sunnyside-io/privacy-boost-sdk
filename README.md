@@ -114,6 +114,6 @@ Each release asset includes a `.sha256` checksum file:
 shasum -a 256 -c privacy-boost-darwin-arm64.tar.gz.sha256
 ```
 
-## License
+## Documentation
 
-MIT OR Apache-2.0
+Full documentation is available at [docs.privacyboost.io](https://docs.privacyboost.io).
