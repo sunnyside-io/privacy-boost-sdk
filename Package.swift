@@ -19,12 +19,10 @@ let package = Package(
             dependencies: ["PrivacyBoostFFI"],
             path: "Sources/PrivacyBoost"
         ),
-        // Binary target is updated automatically by CI on each release.
-        // See: https://github.com/testinprod-io/privacy-boost/releases
         .binaryTarget(
             name: "PrivacyBoostFFI",
-            url: "https://github.com/testinprod-io/privacy-boost/releases/download/v0.0.15/PrivacyBoostFFI.xcframework.zip",
-            checksum: "PLACEHOLDER"
+            url: "https://github.com/testinprod-io/privacy-boost/releases/download/v0.1.0/PrivacyBoostFFI.xcframework.zip",
+            checksum: "b2be08fe0d9713a37fb332c0262e921b2eaaf163d253c4c0e787bad13bf2bcdb"
         ),
     ]
 )
