@@ -10,36 +10,20 @@ Cross-platform privacy boost SDK. Pre-built binaries for iOS, Android, Web, and 
 
 Packages are published to GitHub Packages under the `@testinprod-io` scope.
 
-**1. Configure npm to use GitHub Packages for this scope:**
-
-Create or update `.npmrc` in your project root:
-```
-@testinprod-io:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
-
-> You need a [GitHub Personal Access Token](https://github.com/settings/tokens) with `read:packages` scope. Set it as `GITHUB_TOKEN` in your environment or replace the variable directly.
-
-**2. Install:**
+**1. Install:**
 
 ```bash
 # TypeScript SDK
-npm install @testinprod-io/privacy-boost-sdk
+npm install @testinprod-io/privacy-boost
 
 # React hooks (optional)
 npm install @testinprod-io/privacy-boost-react
 ```
 
-**For beta releases:**
-```bash
-npm install @testinprod-io/privacy-boost-sdk@beta
-npm install @testinprod-io/privacy-boost-react@beta
-```
-
-**3. Usage:**
+**2. Usage:**
 
 ```typescript
-import { PrivacyBoost } from '@testinprod-io/privacy-boost-sdk';
+import { PrivacyBoost } from '@testinprod-io/privacy-boost';
 
 const sdk = new PrivacyBoost({
   indexerUrl: 'https://indexer.example.com',
@@ -77,7 +61,7 @@ Add this repository as a Swift package dependency:
 ```swift
 // Package.swift
 dependencies: [
-    .package(url: "https://github.com/testinprod-io/privacy-boost", from: "0.0.15")
+    .package(url: "https://github.com/testinprod-io/privacy-boost", from: "0.1.0")
 ]
 ```
 
