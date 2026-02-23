@@ -12,7 +12,7 @@ import Foundation
 #endif
 
 private extension RustBuffer {
-    // Allocate a new buffer, copying the contents of a `UInt8` array.
+    /// Allocate a new buffer, copying the contents of a `UInt8` array.
     init(bytes: [UInt8]) {
         let rbuf = bytes.withUnsafeBufferPointer { ptr in
             RustBuffer.from(ptr)
@@ -28,8 +28,8 @@ private extension RustBuffer {
         try! rustCall { ffi_privacy_boost_ios_rustbuffer_from_bytes(ForeignBytes(bufferPointer: ptr), $0) }
     }
 
-    // Frees the buffer in place.
-    // The buffer must not be used after this is called.
+    /// Frees the buffer in place.
+    /// The buffer must not be used after this is called.
     func deallocate() {
         try! rustCall { ffi_privacy_boost_ios_rustbuffer_free(self, $0) }
     }
@@ -76,9 +76,9 @@ private func createReader(data: Data) -> (data: Data, offset: Data.Index) {
     (data: data, offset: 0)
 }
 
-// Reads an integer at the current offset, in big-endian order, and advances
-// the offset on success. Throws if reading the integer would move the
-// offset past the end of the buffer.
+/// Reads an integer at the current offset, in big-endian order, and advances
+/// the offset on success. Throws if reading the integer would move the
+/// offset past the end of the buffer.
 private func readInt<T: FixedWidthInteger>(_ reader: inout (data: Data, offset: Data.Index)) throws -> T {
     let range = reader.offset ..< reader.offset + MemoryLayout<T>.size
     guard reader.data.count >= range.upperBound else {
@@ -95,8 +95,8 @@ private func readInt<T: FixedWidthInteger>(_ reader: inout (data: Data, offset: 
     return value.bigEndian
 }
 
-// Reads an arbitrary number of bytes, to be used to read
-// raw bytes, this is useful when lifting strings
+/// Reads an arbitrary number of bytes, to be used to read
+/// raw bytes, this is useful when lifting strings
 private func readBytes(_ reader: inout (data: Data, offset: Data.Index), count: Int) throws -> [UInt8] {
     let range = reader.offset ..< (reader.offset + count)
     guard reader.data.count >= range.upperBound else {
@@ -110,17 +110,17 @@ private func readBytes(_ reader: inout (data: Data, offset: Data.Index), count: 
     return value
 }
 
-// Reads a float at the current offset.
+/// Reads a float at the current offset.
 private func readFloat(_ reader: inout (data: Data, offset: Data.Index)) throws -> Float {
     return try Float(bitPattern: readInt(&reader))
 }
 
-// Reads a float at the current offset.
+/// Reads a float at the current offset.
 private func readDouble(_ reader: inout (data: Data, offset: Data.Index)) throws -> Double {
     return try Double(bitPattern: readInt(&reader))
 }
 
-// Indicates if the offset has reached the end of the buffer.
+/// Indicates if the offset has reached the end of the buffer.
 private func hasRemaining(_ reader: (data: Data, offset: Data.Index)) -> Bool {
     return reader.offset < reader.data.count
 }
@@ -133,14 +133,14 @@ private func createWriter() -> [UInt8] {
     return []
 }
 
-private func writeBytes<S>(_ writer: inout [UInt8], _ byteArr: S) where S: Sequence, S.Element == UInt8 {
+private func writeBytes<S: Sequence>(_ writer: inout [UInt8], _ byteArr: S) where S.Element == UInt8 {
     writer.append(contentsOf: byteArr)
 }
 
-// Writes an integer in big-endian order.
-//
-// Warning: make sure what you are trying to write
-// is in the correct type!
+/// Writes an integer in big-endian order.
+///
+/// Warning: make sure what you are trying to write
+/// is in the correct type!
 private func writeInt<T: FixedWidthInteger>(_ writer: inout [UInt8], _ value: T) {
     var value = value.bigEndian
     withUnsafeBytes(of: &value) { writer.append(contentsOf: $0) }
@@ -154,8 +154,8 @@ private func writeDouble(_ writer: inout [UInt8], _ value: Double) {
     writeInt(&writer, value.bitPattern)
 }
 
-// Protocol for types that transfer other types across the FFI. This is
-// analogous to the Rust trait of the same name.
+/// Protocol for types that transfer other types across the FFI. This is
+/// analogous to the Rust trait of the same name.
 private protocol FfiConverter {
     associatedtype FfiType
     associatedtype SwiftType
@@ -166,7 +166,7 @@ private protocol FfiConverter {
     static func write(_ value: SwiftType, into buf: inout [UInt8])
 }
 
-// Types conforming to `Primitive` pass themselves directly over the FFI.
+/// Types conforming to `Primitive` pass themselves directly over the FFI.
 private protocol FfiConverterPrimitive: FfiConverter where FfiType == SwiftType {}
 
 extension FfiConverterPrimitive {
@@ -185,8 +185,8 @@ extension FfiConverterPrimitive {
     }
 }
 
-// Types conforming to `FfiConverterRustBuffer` lift and lower into a `RustBuffer`.
-// Used for complex types where it's hard to write a custom lift/lower.
+/// Types conforming to `FfiConverterRustBuffer` lift and lower into a `RustBuffer`.
+/// Used for complex types where it's hard to write a custom lift/lower.
 private protocol FfiConverterRustBuffer: FfiConverter where FfiType == RustBuffer {}
 
 extension FfiConverterRustBuffer {
@@ -213,8 +213,8 @@ extension FfiConverterRustBuffer {
     }
 }
 
-// An error type for FFI errors. These errors occur at the UniFFI level, not
-// the library level.
+/// An error type for FFI errors. These errors occur at the UniFFI level, not
+/// the library level.
 private enum UniffiInternalError: LocalizedError {
     case bufferOverflow
     case incompleteData
@@ -559,7 +559,7 @@ open class PrivacyBoostSdk:
 {
     fileprivate let pointer: UnsafeMutableRawPointer!
 
-    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+    // Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
     #if swift(>=5.8)
         @_documentation(visibility: private)
     #endif
@@ -626,9 +626,10 @@ open class PrivacyBoostSdk:
         })
     }
 
-    open func disconnect() { try! rustCall {
-        uniffi_privacy_boost_ios_fn_method_privacyboostsdk_disconnect(self.uniffiClonePointer(), $0)
-    }
+    open func disconnect() {
+        try! rustCall {
+            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_disconnect(self.uniffiClonePointer(), $0)
+        }
     }
 
     open func exportSession() -> ExportedSession? {
@@ -724,9 +725,10 @@ open class PrivacyBoostSdk:
         })
     }
 
-    open func logout() { try! rustCall {
-        uniffi_privacy_boost_ios_fn_method_privacyboostsdk_logout(self.uniffiClonePointer(), $0)
-    }
+    open func logout() {
+        try! rustCall {
+            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_logout(self.uniffiClonePointer(), $0)
+        }
     }
 
     open func parseAmount(amount: String, decimals: UInt8) throws -> String {
@@ -827,7 +829,7 @@ open class WalletDelegateImpl:
 {
     fileprivate let pointer: UnsafeMutableRawPointer!
 
-    /// Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+    // Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
     #if swift(>=5.8)
         @_documentation(visibility: private)
     #endif
@@ -907,18 +909,18 @@ open class WalletDelegateImpl:
     }
 }
 
-// Magic number for the Rust proxy to call using the same mechanism as every other method,
-// to free the callback once it's dropped by Rust.
+/// Magic number for the Rust proxy to call using the same mechanism as every other method,
+/// to free the callback once it's dropped by Rust.
 private let IDX_CALLBACK_FREE: Int32 = 0
 // Callback return codes
 private let UNIFFI_CALLBACK_SUCCESS: Int32 = 0
 private let UNIFFI_CALLBACK_ERROR: Int32 = 1
 private let UNIFFI_CALLBACK_UNEXPECTED_ERROR: Int32 = 2
 
-// Put the implementation in a struct so we don't pollute the top-level namespace
+/// Put the implementation in a struct so we don't pollute the top-level namespace
 private enum UniffiCallbackInterfaceWalletDelegate {
-    // Create the VTable using a series of closures.
-    // Swift automatically converts these into C callback functions.
+    /// Create the VTable using a series of closures.
+    /// Swift automatically converts these into C callback functions.
     static var vtable: UniffiVTableCallbackInterfaceWalletDelegate = .init(
         getAddress: { (
             uniffiHandle: UInt64,
@@ -1110,8 +1112,8 @@ public struct ConnectResult {
     public var privacyAddress: String
     public var mpk: String
 
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
     public init(walletAddress: String, privacyAddress: String, mpk: String) {
         self.walletAddress = walletAddress
         self.privacyAddress = privacyAddress
@@ -1179,8 +1181,8 @@ public struct DepositResult {
     public var commitment: String
     public var fee: String
 
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
     public init(txHash: String, commitment: String, fee: String) {
         self.txHash = txHash
         self.commitment = commitment
@@ -1259,8 +1261,8 @@ public struct ExportedSession {
     public var ethSignature: String
     public var ethSignatureMessage: String
 
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
     public init(walletPublicKeyX: String, walletPublicKeyY: String, viewingKey: String, viewingPublicKeyX: String, viewingPublicKeyY: String, nullifyingKey: String, nullifyingPublicKeyX: String, nullifyingPublicKeyY: String, mpk: String, jwt: String, jwtExpiry: UInt64, walletAddress: String, ethSignature: String, ethSignatureMessage: String) {
         self.walletPublicKeyX = walletPublicKeyX
         self.walletPublicKeyY = walletPublicKeyY
@@ -1407,8 +1409,8 @@ public struct IdentityResult {
     public var viewingPublicKeyY: String
     public var privacyAddress: String
 
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
     public init(mpk: String, ethereumAddress: String, viewingPublicKeyX: String, viewingPublicKeyY: String, privacyAddress: String) {
         self.mpk = mpk
         self.ethereumAddress = ethereumAddress
@@ -1489,8 +1491,8 @@ public struct LoginResult {
     public var privacyAddress: String
     public var mpk: String
 
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
     public init(privacyAddress: String, mpk: String) {
         self.privacyAddress = privacyAddress
         self.mpk = mpk
@@ -1553,8 +1555,8 @@ public struct SdkConfig {
     public var shieldContract: String
     public var wethContract: String
 
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
     public init(indexerUrl: String, proverUrl: String, chainId: UInt64, shieldContract: String, wethContract: String) {
         self.indexerUrl = indexerUrl
         self.proverUrl = proverUrl
@@ -1638,8 +1640,8 @@ public struct TokenBalance {
     public var symbol: String?
     public var decimals: UInt8
 
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
     public init(tokenAddress: String, shieldedBalance: String, walletBalance: String, symbol: String?, decimals: UInt8) {
         self.tokenAddress = tokenAddress
         self.shieldedBalance = shieldedBalance
@@ -1726,8 +1728,8 @@ public struct Transaction {
     public var receiverPubKeys: [String]
     public var createdAt: UInt64
 
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
     public init(txHash: String, txType: String, tokenAddress: String, amount: String, direction: String, senderPubKey: String, receiverPubKeys: [String], createdAt: UInt64) {
         self.txHash = txHash
         self.txType = txType
@@ -1829,8 +1831,8 @@ public struct TransferResult {
     public var txHash: String
     public var fee: String
 
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
     public init(txHash: String, fee: String) {
         self.txHash = txHash
         self.fee = fee
@@ -1890,8 +1892,8 @@ public struct WithdrawResult {
     public var txHash: String
     public var fee: String
 
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
     public init(txHash: String, fee: String) {
         self.txHash = txHash
         self.fee = fee
@@ -1951,18 +1953,14 @@ public enum SdkError {
     case NotConnected
     case NotAuthenticated
     case InvalidConfig
-    case NetworkError(message: String
-    )
-    case WalletError(message: String
-    )
+    case NetworkError(message: String)
+    case WalletError(message: String)
     case SignatureRejected
     case InsufficientBalance
     case InvalidAddress
     case InvalidAmount
-    case SerializationError(message: String
-    )
-    case InternalError(message: String
-    )
+    case SerializationError(message: String)
+    case InternalError(message: String)
 }
 
 #if swift(>=5.8)
@@ -2196,8 +2194,7 @@ private struct FfiConverterSequenceTypeTransaction: FfiConverterRustBuffer {
 
 public func sdkVersion() -> String {
     return try! FfiConverterString.lift(try! rustCall {
-        uniffi_privacy_boost_ios_fn_func_sdk_version($0
-        )
+        uniffi_privacy_boost_ios_fn_func_sdk_version($0)
     })
 }
 
@@ -2207,8 +2204,8 @@ private enum InitializationResult {
     case apiChecksumMismatch
 }
 
-// Use a global variable to perform the versioning checks. Swift ensures that
-// the code inside is only computed once.
+/// Use a global variable to perform the versioning checks. Swift ensures that
+/// the code inside is only computed once.
 private var initializationResult: InitializationResult = {
     // Get the bindings contract version from our ComponentInterface
     let bindings_contract_version = 26
