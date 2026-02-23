@@ -37,7 +37,7 @@ await sdk.auth.authenticate();
 
 ### CLI
 
-Download the binary for your platform from [Releases](https://github.com/testinprod-io/privacy-boost/releases):
+Download the binary for your platform from [Releases](https://github.com/testinprod-io/privacy-boost-sdk/releases):
 
 | Platform | Asset |
 |----------|-------|
@@ -49,7 +49,7 @@ Download the binary for your platform from [Releases](https://github.com/testinp
 
 ```bash
 # Example: macOS Apple Silicon
-curl -LO https://github.com/testinprod-io/privacy-boost/releases/latest/download/privacy-boost-darwin-arm64.tar.gz
+curl -LO https://github.com/testinprod-io/privacy-boost-sdk/releases/latest/download/privacy-boost-darwin-arm64.tar.gz
 tar -xzf privacy-boost-darwin-arm64.tar.gz
 ./privacy-boost --help
 ```
@@ -61,13 +61,13 @@ Add this repository as a Swift package dependency:
 ```swift
 // Package.swift
 dependencies: [
-    .package(url: "https://github.com/testinprod-io/privacy-boost", from: "0.1.0")
+    .package(url: "https://github.com/testinprod-io/privacy-boost-sdk", from: "0.1.0")
 ]
 ```
 
 Or in Xcode: **File > Add Package Dependencies** and enter:
 ```
-https://github.com/testinprod-io/privacy-boost
+https://github.com/testinprod-io/privacy-boost-sdk
 ```
 
 Then import in your Swift code:
@@ -77,7 +77,7 @@ import PrivacyBoost
 
 ### Android
 
-Download the latest `PrivacyBoost-Android.zip` from [Releases](https://github.com/testinprod-io/privacy-boost/releases).
+Download the latest `PrivacyBoost-Android.zip` from [Releases](https://github.com/testinprod-io/privacy-boost-sdk/releases).
 
 **Option A: Local Gradle module**
 
