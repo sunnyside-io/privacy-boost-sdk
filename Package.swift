@@ -19,10 +19,10 @@ let package = Package(
             dependencies: ["PrivacyBoostFFI"],
             path: "Sources/PrivacyBoost"
         ),
-        .binaryTarget(
-            name: "PrivacyBoostFFI",
-        url: "https://github.com/testinprod-io/privacy-boost-sdk/releases/download/v0.1.4/PrivacyBoostFFI.xcframework.zip",
-            checksum: "ca9b700f6cfd768280e567dd952dbd4bae17ab69a2f98ee038a7e9565b3b3ba5"
-        ),
+          .binaryTarget(
+              name: "PrivacyBoostFFI",
+              url: "https://github.com/testinprod-io/privacy-boost-sdk/releases/download/v0.2.0/PrivacyBoostFFI.xcframework.zip",
+              checksum: "43c0a21260dd0f3c295834dfd8ba646596205dd96713319ff57c404ffff4e2a3"
+          ),
     ]
 )

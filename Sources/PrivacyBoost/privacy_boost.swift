@@ -414,6 +414,22 @@ private struct FfiConverterUInt8: FfiConverterPrimitive {
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
+private struct FfiConverterUInt16: FfiConverterPrimitive {
+    typealias FfiType = UInt16
+    typealias SwiftType = UInt16
+
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt16 {
+        return try lift(readInt(&buf))
+    }
+
+    static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
 private struct FfiConverterUInt32: FfiConverterPrimitive {
     typealias FfiType = UInt32
     typealias SwiftType = UInt32
@@ -508,54 +524,38 @@ private struct FfiConverterString: FfiConverter {
     }
 }
 
-public protocol PrivacyBoostSdkProtocol: AnyObject {
-    func connect(wallet: WalletDelegate) throws -> ConnectResult
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+private struct FfiConverterData: FfiConverterRustBuffer {
+    typealias SwiftType = Data
 
-    func deposit(tokenAddress: String, amount: String) throws -> DepositResult
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Data {
+        let len: Int32 = try readInt(&buf)
+        return try Data(readBytes(&buf, count: Int(len)))
+    }
 
-    func disconnect()
-
-    func exportSession() -> ExportedSession?
-
-    func formatAmount(wei: String, decimals: UInt8) throws -> String
-
-    func getAllBalances() throws -> [TokenBalance]
-
-    func getBalance(tokenAddress: String) throws -> TokenBalance
-
-    func getMpk() -> String?
-
-    func getPrivacyAddress() -> String?
-
-    func getTransactionHistory(txType: String?, tokenAddress: String?, limit: UInt32?) throws -> [Transaction]
-
-    func getWalletAddress() -> String?
-
-    func importSession(session: ExportedSession) throws -> Bool
-
-    func isAuthenticated() -> Bool
-
-    func isConnected() -> Bool
-
-    func isValidAddress(address: String) -> Bool
-
-    func isValidPrivacyAddress(address: String) -> Bool
-
-    func login() throws -> LoginResult
-
-    func logout()
-
-    func parseAmount(amount: String, decimals: UInt8) throws -> String
-
-    func searchAddress(identifier: String) throws -> IdentityResult
-
-    func send(tokenAddress: String, amount: String, recipientPrivacyAddress: String) throws -> TransferResult
-
-    func withdraw(tokenAddress: String, amount: String, recipient: String) throws -> WithdrawResult
+    static func write(_ value: Data, into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        writeBytes(&buf, value)
+    }
 }
 
-open class PrivacyBoostSdk:
-    PrivacyBoostSdkProtocol
+public protocol BiometricDelegate: AnyObject {
+    func authenticate(reason: String) async throws -> BiometricAuthenticationResult
+
+    func deleteSecret(key: String) async throws
+
+    func getCapabilities() async throws -> BiometricCapabilityResult
+
+    func retrieveSecret(key: String) async throws -> Data?
+
+    func storeSecret(key: String, secret: Data) async throws
+}
+
+open class BiometricDelegateImpl:
+    BiometricDelegate
 {
     fileprivate let pointer: UnsafeMutableRawPointer!
 
@@ -590,197 +590,362 @@ open class PrivacyBoostSdk:
         @_documentation(visibility: private)
     #endif
     public func uniffiClonePointer() -> UnsafeMutableRawPointer {
-        return try! rustCall { uniffi_privacy_boost_ios_fn_clone_privacyboostsdk(self.pointer, $0) }
+        return try! rustCall { uniffi_privacy_boost_ios_fn_clone_biometricdelegate(self.pointer, $0) }
     }
 
-    public convenience init(config: SdkConfig) throws {
-        let pointer =
-            try rustCallWithError(FfiConverterTypeSDKError.lift) {
-                uniffi_privacy_boost_ios_fn_constructor_privacyboostsdk_new(
-                    FfiConverterTypeSDKConfig.lower(config), $0
-                )
-            }
-        self.init(unsafeFromRawPointer: pointer)
-    }
+    // No primary constructor declared for this class.
 
     deinit {
         guard let pointer = pointer else {
             return
         }
 
-        try! rustCall { uniffi_privacy_boost_ios_fn_free_privacyboostsdk(pointer, $0) }
+        try! rustCall { uniffi_privacy_boost_ios_fn_free_biometricdelegate(pointer, $0) }
     }
 
-    open func connect(wallet: WalletDelegate) throws -> ConnectResult {
-        return try FfiConverterTypeConnectResult.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_connect(self.uniffiClonePointer(),
-                                                                       FfiConverterTypeWalletDelegate.lower(wallet), $0)
-        })
+    open func authenticate(reason: String) async throws -> BiometricAuthenticationResult {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_biometricdelegate_authenticate(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(reason)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterTypeBiometricAuthenticationResult.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
     }
 
-    open func deposit(tokenAddress: String, amount: String) throws -> DepositResult {
-        return try FfiConverterTypeDepositResult.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_deposit(self.uniffiClonePointer(),
-                                                                       FfiConverterString.lower(tokenAddress),
-                                                                       FfiConverterString.lower(amount), $0)
-        })
+    open func deleteSecret(key: String) async throws {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_biometricdelegate_delete_secret(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(key)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_void,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_void,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_void,
+                liftFunc: { $0 },
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
     }
 
-    open func disconnect() {
-        try! rustCall {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_disconnect(self.uniffiClonePointer(), $0)
+    open func getCapabilities() async throws -> BiometricCapabilityResult {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_biometricdelegate_get_capabilities(
+                        self.uniffiClonePointer()
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterTypeBiometricCapabilityResult.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+
+    open func retrieveSecret(key: String) async throws -> Data? {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_biometricdelegate_retrieve_secret(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(key)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterOptionData.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+
+    open func storeSecret(key: String, secret: Data) async throws {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_biometricdelegate_store_secret(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(key), FfiConverterData.lower(secret)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_void,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_void,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_void,
+                liftFunc: { $0 },
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+}
+
+/// Magic number for the Rust proxy to call using the same mechanism as every other method,
+/// to free the callback once it's dropped by Rust.
+private let IDX_CALLBACK_FREE: Int32 = 0
+// Callback return codes
+private let UNIFFI_CALLBACK_SUCCESS: Int32 = 0
+private let UNIFFI_CALLBACK_ERROR: Int32 = 1
+private let UNIFFI_CALLBACK_UNEXPECTED_ERROR: Int32 = 2
+
+/// Put the implementation in a struct so we don't pollute the top-level namespace
+private enum UniffiCallbackInterfaceBiometricDelegate {
+    /// Create the VTable using a series of closures.
+    /// Swift automatically converts these into C callback functions.
+    static var vtable: UniffiVTableCallbackInterfaceBiometricDelegate = .init(
+        authenticate: { (
+            uniffiHandle: UInt64,
+            reason: RustBuffer,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteRustBuffer,
+            uniffiCallbackData: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<UniffiForeignFuture>
+        ) in
+            let makeCall = {
+                () async throws -> BiometricAuthenticationResult in
+                guard let uniffiObj = try? FfiConverterTypeBiometricDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.authenticate(
+                    reason: FfiConverterString.lift(reason)
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: BiometricAuthenticationResult) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: FfiConverterTypeBiometricAuthenticationResult.lower(returnValue),
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { statusCode, errorBuf in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: RustBuffer.empty(),
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            let uniffiForeignFuture = uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeSDKError.lower
+            )
+            uniffiOutReturn.pointee = uniffiForeignFuture
+        },
+        deleteSecret: { (
+            uniffiHandle: UInt64,
+            key: RustBuffer,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteVoid,
+            uniffiCallbackData: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<UniffiForeignFuture>
+        ) in
+            let makeCall = {
+                () async throws in
+                guard let uniffiObj = try? FfiConverterTypeBiometricDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.deleteSecret(
+                    key: FfiConverterString.lift(key)
+                )
+            }
+
+            let uniffiHandleSuccess = { (_: ()) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructVoid(
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { statusCode, errorBuf in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructVoid(
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            let uniffiForeignFuture = uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeSDKError.lower
+            )
+            uniffiOutReturn.pointee = uniffiForeignFuture
+        },
+        getCapabilities: { (
+            uniffiHandle: UInt64,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteRustBuffer,
+            uniffiCallbackData: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<UniffiForeignFuture>
+        ) in
+            let makeCall = {
+                () async throws -> BiometricCapabilityResult in
+                guard let uniffiObj = try? FfiConverterTypeBiometricDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.getCapabilities(
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: BiometricCapabilityResult) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: FfiConverterTypeBiometricCapabilityResult.lower(returnValue),
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { statusCode, errorBuf in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: RustBuffer.empty(),
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            let uniffiForeignFuture = uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeSDKError.lower
+            )
+            uniffiOutReturn.pointee = uniffiForeignFuture
+        },
+        retrieveSecret: { (
+            uniffiHandle: UInt64,
+            key: RustBuffer,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteRustBuffer,
+            uniffiCallbackData: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<UniffiForeignFuture>
+        ) in
+            let makeCall = {
+                () async throws -> Data? in
+                guard let uniffiObj = try? FfiConverterTypeBiometricDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.retrieveSecret(
+                    key: FfiConverterString.lift(key)
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: Data?) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: FfiConverterOptionData.lower(returnValue),
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { statusCode, errorBuf in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: RustBuffer.empty(),
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            let uniffiForeignFuture = uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeSDKError.lower
+            )
+            uniffiOutReturn.pointee = uniffiForeignFuture
+        },
+        storeSecret: { (
+            uniffiHandle: UInt64,
+            key: RustBuffer,
+            secret: RustBuffer,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteVoid,
+            uniffiCallbackData: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<UniffiForeignFuture>
+        ) in
+            let makeCall = {
+                () async throws in
+                guard let uniffiObj = try? FfiConverterTypeBiometricDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.storeSecret(
+                    key: FfiConverterString.lift(key),
+                    secret: FfiConverterData.lift(secret)
+                )
+            }
+
+            let uniffiHandleSuccess = { (_: ()) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructVoid(
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { statusCode, errorBuf in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructVoid(
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            let uniffiForeignFuture = uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeSDKError.lower
+            )
+            uniffiOutReturn.pointee = uniffiForeignFuture
+        },
+        uniffiFree: { (uniffiHandle: UInt64) in
+            let result = try? FfiConverterTypeBiometricDelegate.handleMap.remove(handle: uniffiHandle)
+            if result == nil {
+                print("Uniffi callback interface BiometricDelegate: handle missing in uniffiFree")
+            }
         }
-    }
+    )
+}
 
-    open func exportSession() -> ExportedSession? {
-        return try! FfiConverterOptionTypeExportedSession.lift(try! rustCall {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_export_session(self.uniffiClonePointer(), $0)
-        })
-    }
-
-    open func formatAmount(wei: String, decimals: UInt8) throws -> String {
-        return try FfiConverterString.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_format_amount(self.uniffiClonePointer(),
-                                                                             FfiConverterString.lower(wei),
-                                                                             FfiConverterUInt8.lower(decimals), $0)
-        })
-    }
-
-    open func getAllBalances() throws -> [TokenBalance] {
-        return try FfiConverterSequenceTypeTokenBalance.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_get_all_balances(self.uniffiClonePointer(), $0)
-        })
-    }
-
-    open func getBalance(tokenAddress: String) throws -> TokenBalance {
-        return try FfiConverterTypeTokenBalance.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_get_balance(self.uniffiClonePointer(),
-                                                                           FfiConverterString.lower(tokenAddress), $0)
-        })
-    }
-
-    open func getMpk() -> String? {
-        return try! FfiConverterOptionString.lift(try! rustCall {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_get_mpk(self.uniffiClonePointer(), $0)
-        })
-    }
-
-    open func getPrivacyAddress() -> String? {
-        return try! FfiConverterOptionString.lift(try! rustCall {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_get_privacy_address(self.uniffiClonePointer(), $0)
-        })
-    }
-
-    open func getTransactionHistory(txType: String?, tokenAddress: String?, limit: UInt32?) throws -> [Transaction] {
-        return try FfiConverterSequenceTypeTransaction.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_get_transaction_history(self.uniffiClonePointer(),
-                                                                                       FfiConverterOptionString.lower(txType),
-                                                                                       FfiConverterOptionString.lower(tokenAddress),
-                                                                                       FfiConverterOptionUInt32.lower(limit), $0)
-        })
-    }
-
-    open func getWalletAddress() -> String? {
-        return try! FfiConverterOptionString.lift(try! rustCall {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_get_wallet_address(self.uniffiClonePointer(), $0)
-        })
-    }
-
-    open func importSession(session: ExportedSession) throws -> Bool {
-        return try FfiConverterBool.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_import_session(self.uniffiClonePointer(),
-                                                                              FfiConverterTypeExportedSession.lower(session), $0)
-        })
-    }
-
-    open func isAuthenticated() -> Bool {
-        return try! FfiConverterBool.lift(try! rustCall {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_is_authenticated(self.uniffiClonePointer(), $0)
-        })
-    }
-
-    open func isConnected() -> Bool {
-        return try! FfiConverterBool.lift(try! rustCall {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_is_connected(self.uniffiClonePointer(), $0)
-        })
-    }
-
-    open func isValidAddress(address: String) -> Bool {
-        return try! FfiConverterBool.lift(try! rustCall {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_is_valid_address(self.uniffiClonePointer(),
-                                                                                FfiConverterString.lower(address), $0)
-        })
-    }
-
-    open func isValidPrivacyAddress(address: String) -> Bool {
-        return try! FfiConverterBool.lift(try! rustCall {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_is_valid_privacy_address(self.uniffiClonePointer(),
-                                                                                        FfiConverterString.lower(address), $0)
-        })
-    }
-
-    open func login() throws -> LoginResult {
-        return try FfiConverterTypeLoginResult.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_login(self.uniffiClonePointer(), $0)
-        })
-    }
-
-    open func logout() {
-        try! rustCall {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_logout(self.uniffiClonePointer(), $0)
-        }
-    }
-
-    open func parseAmount(amount: String, decimals: UInt8) throws -> String {
-        return try FfiConverterString.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_parse_amount(self.uniffiClonePointer(),
-                                                                            FfiConverterString.lower(amount),
-                                                                            FfiConverterUInt8.lower(decimals), $0)
-        })
-    }
-
-    open func searchAddress(identifier: String) throws -> IdentityResult {
-        return try FfiConverterTypeIdentityResult.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_search_address(self.uniffiClonePointer(),
-                                                                              FfiConverterString.lower(identifier), $0)
-        })
-    }
-
-    open func send(tokenAddress: String, amount: String, recipientPrivacyAddress: String) throws -> TransferResult {
-        return try FfiConverterTypeTransferResult.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_send(self.uniffiClonePointer(),
-                                                                    FfiConverterString.lower(tokenAddress),
-                                                                    FfiConverterString.lower(amount),
-                                                                    FfiConverterString.lower(recipientPrivacyAddress), $0)
-        })
-    }
-
-    open func withdraw(tokenAddress: String, amount: String, recipient: String) throws -> WithdrawResult {
-        return try FfiConverterTypeWithdrawResult.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
-            uniffi_privacy_boost_ios_fn_method_privacyboostsdk_withdraw(self.uniffiClonePointer(),
-                                                                        FfiConverterString.lower(tokenAddress),
-                                                                        FfiConverterString.lower(amount),
-                                                                        FfiConverterString.lower(recipient), $0)
-        })
-    }
+private func uniffiCallbackInitBiometricDelegate() {
+    uniffi_privacy_boost_ios_fn_init_callback_vtable_biometricdelegate(&UniffiCallbackInterfaceBiometricDelegate.vtable)
 }
 
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypePrivacyBoostSDK: FfiConverter {
+public struct FfiConverterTypeBiometricDelegate: FfiConverter {
+    fileprivate static var handleMap = UniffiHandleMap<BiometricDelegate>()
+
     typealias FfiType = UnsafeMutableRawPointer
-    typealias SwiftType = PrivacyBoostSdk
+    typealias SwiftType = BiometricDelegate
 
-    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> PrivacyBoostSdk {
-        return PrivacyBoostSdk(unsafeFromRawPointer: pointer)
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> BiometricDelegate {
+        return BiometricDelegateImpl(unsafeFromRawPointer: pointer)
     }
 
-    public static func lower(_ value: PrivacyBoostSdk) -> UnsafeMutableRawPointer {
-        return value.uniffiClonePointer()
+    public static func lower(_ value: BiometricDelegate) -> UnsafeMutableRawPointer {
+        guard let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: handleMap.insert(obj: value))) else {
+            fatalError("Cast to UnsafeMutableRawPointer failed")
+        }
+        return ptr
     }
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PrivacyBoostSdk {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BiometricDelegate {
         let v: UInt64 = try readInt(&buf)
         // The Rust code won't compile if a pointer won't fit in a UInt64.
         // We have to go via `UInt` because that's the thing that's the size of a pointer.
@@ -791,7 +956,7 @@ public struct FfiConverterTypePrivacyBoostSDK: FfiConverter {
         return try lift(ptr!)
     }
 
-    public static func write(_ value: PrivacyBoostSdk, into buf: inout [UInt8]) {
+    public static func write(_ value: BiometricDelegate, into buf: inout [UInt8]) {
         // This fiddling is because `Int` is the thing that's the same size as a pointer.
         // The Rust code won't compile if a pointer won't fit in a `UInt64`.
         writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
@@ -801,27 +966,1363 @@ public struct FfiConverterTypePrivacyBoostSDK: FfiConverter {
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-public func FfiConverterTypePrivacyBoostSDK_lift(_ pointer: UnsafeMutableRawPointer) throws -> PrivacyBoostSdk {
-    return try FfiConverterTypePrivacyBoostSDK.lift(pointer)
+public func FfiConverterTypeBiometricDelegate_lift(_ pointer: UnsafeMutableRawPointer) throws -> BiometricDelegate {
+    return try FfiConverterTypeBiometricDelegate.lift(pointer)
 }
 
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-public func FfiConverterTypePrivacyBoostSDK_lower(_ value: PrivacyBoostSdk) -> UnsafeMutableRawPointer {
-    return FfiConverterTypePrivacyBoostSDK.lower(value)
+public func FfiConverterTypeBiometricDelegate_lower(_ value: BiometricDelegate) -> UnsafeMutableRawPointer {
+    return FfiConverterTypeBiometricDelegate.lower(value)
+}
+
+public protocol KeychainDelegate: AnyObject {
+    func contains(key: String) async throws -> Bool
+
+    func delete(key: String) async throws
+
+    func isAvailable() -> Bool
+
+    func load(key: String) async throws -> Data?
+
+    func store(key: String, value: Data, requireBiometry: Bool) async throws
+
+    func supportsBiometry() -> Bool
+}
+
+open class KeychainDelegateImpl:
+    KeychainDelegate
+{
+    fileprivate let pointer: UnsafeMutableRawPointer!
+
+    // Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public struct NoPointer {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+    public required init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public init(noPointer _: NoPointer) {
+        pointer = nil
+    }
+
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_privacy_boost_ios_fn_clone_keychaindelegate(self.pointer, $0) }
+    }
+
+    // No primary constructor declared for this class.
+
+    deinit {
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_privacy_boost_ios_fn_free_keychaindelegate(pointer, $0) }
+    }
+
+    open func contains(key: String) async throws -> Bool {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_keychaindelegate_contains(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(key)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_i8,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_i8,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_i8,
+                liftFunc: FfiConverterBool.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+
+    open func delete(key: String) async throws {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_keychaindelegate_delete(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(key)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_void,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_void,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_void,
+                liftFunc: { $0 },
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+
+    open func isAvailable() -> Bool {
+        return try! FfiConverterBool.lift(try! rustCall {
+            uniffi_privacy_boost_ios_fn_method_keychaindelegate_is_available(self.uniffiClonePointer(), $0)
+        })
+    }
+
+    open func load(key: String) async throws -> Data? {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_keychaindelegate_load(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(key)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterOptionData.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+
+    open func store(key: String, value: Data, requireBiometry: Bool) async throws {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_keychaindelegate_store(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(key), FfiConverterData.lower(value), FfiConverterBool.lower(requireBiometry)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_void,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_void,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_void,
+                liftFunc: { $0 },
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+
+    open func supportsBiometry() -> Bool {
+        return try! FfiConverterBool.lift(try! rustCall {
+            uniffi_privacy_boost_ios_fn_method_keychaindelegate_supports_biometry(self.uniffiClonePointer(), $0)
+        })
+    }
+}
+
+/// Put the implementation in a struct so we don't pollute the top-level namespace
+private enum UniffiCallbackInterfaceKeychainDelegate {
+    /// Create the VTable using a series of closures.
+    /// Swift automatically converts these into C callback functions.
+    static var vtable: UniffiVTableCallbackInterfaceKeychainDelegate = .init(
+        contains: { (
+            uniffiHandle: UInt64,
+            key: RustBuffer,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteI8,
+            uniffiCallbackData: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<UniffiForeignFuture>
+        ) in
+            let makeCall = {
+                () async throws -> Bool in
+                guard let uniffiObj = try? FfiConverterTypeKeychainDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.contains(
+                    key: FfiConverterString.lift(key)
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: Bool) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructI8(
+                        returnValue: FfiConverterBool.lower(returnValue),
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { statusCode, errorBuf in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructI8(
+                        returnValue: 0,
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            let uniffiForeignFuture = uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeSDKError.lower
+            )
+            uniffiOutReturn.pointee = uniffiForeignFuture
+        },
+        delete: { (
+            uniffiHandle: UInt64,
+            key: RustBuffer,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteVoid,
+            uniffiCallbackData: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<UniffiForeignFuture>
+        ) in
+            let makeCall = {
+                () async throws in
+                guard let uniffiObj = try? FfiConverterTypeKeychainDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.delete(
+                    key: FfiConverterString.lift(key)
+                )
+            }
+
+            let uniffiHandleSuccess = { (_: ()) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructVoid(
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { statusCode, errorBuf in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructVoid(
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            let uniffiForeignFuture = uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeSDKError.lower
+            )
+            uniffiOutReturn.pointee = uniffiForeignFuture
+        },
+        isAvailable: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<Int8>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> Bool in
+                guard let uniffiObj = try? FfiConverterTypeKeychainDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.isAvailable(
+                )
+            }
+
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterBool.lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        load: { (
+            uniffiHandle: UInt64,
+            key: RustBuffer,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteRustBuffer,
+            uniffiCallbackData: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<UniffiForeignFuture>
+        ) in
+            let makeCall = {
+                () async throws -> Data? in
+                guard let uniffiObj = try? FfiConverterTypeKeychainDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.load(
+                    key: FfiConverterString.lift(key)
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: Data?) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: FfiConverterOptionData.lower(returnValue),
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { statusCode, errorBuf in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: RustBuffer.empty(),
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            let uniffiForeignFuture = uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeSDKError.lower
+            )
+            uniffiOutReturn.pointee = uniffiForeignFuture
+        },
+        store: { (
+            uniffiHandle: UInt64,
+            key: RustBuffer,
+            value: RustBuffer,
+            requireBiometry: Int8,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteVoid,
+            uniffiCallbackData: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<UniffiForeignFuture>
+        ) in
+            let makeCall = {
+                () async throws in
+                guard let uniffiObj = try? FfiConverterTypeKeychainDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.store(
+                    key: FfiConverterString.lift(key),
+                    value: FfiConverterData.lift(value),
+                    requireBiometry: FfiConverterBool.lift(requireBiometry)
+                )
+            }
+
+            let uniffiHandleSuccess = { (_: ()) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructVoid(
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { statusCode, errorBuf in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructVoid(
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            let uniffiForeignFuture = uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeSDKError.lower
+            )
+            uniffiOutReturn.pointee = uniffiForeignFuture
+        },
+        supportsBiometry: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<Int8>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> Bool in
+                guard let uniffiObj = try? FfiConverterTypeKeychainDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.supportsBiometry(
+                )
+            }
+
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterBool.lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        uniffiFree: { (uniffiHandle: UInt64) in
+            let result = try? FfiConverterTypeKeychainDelegate.handleMap.remove(handle: uniffiHandle)
+            if result == nil {
+                print("Uniffi callback interface KeychainDelegate: handle missing in uniffiFree")
+            }
+        }
+    )
+}
+
+private func uniffiCallbackInitKeychainDelegate() {
+    uniffi_privacy_boost_ios_fn_init_callback_vtable_keychaindelegate(&UniffiCallbackInterfaceKeychainDelegate.vtable)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeKeychainDelegate: FfiConverter {
+    fileprivate static var handleMap = UniffiHandleMap<KeychainDelegate>()
+
+    typealias FfiType = UnsafeMutableRawPointer
+    typealias SwiftType = KeychainDelegate
+
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> KeychainDelegate {
+        return KeychainDelegateImpl(unsafeFromRawPointer: pointer)
+    }
+
+    public static func lower(_ value: KeychainDelegate) -> UnsafeMutableRawPointer {
+        guard let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: handleMap.insert(obj: value))) else {
+            fatalError("Cast to UnsafeMutableRawPointer failed")
+        }
+        return ptr
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KeychainDelegate {
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if ptr == nil {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
+    }
+
+    public static func write(_ value: KeychainDelegate, into buf: inout [UInt8]) {
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKeychainDelegate_lift(_ pointer: UnsafeMutableRawPointer) throws -> KeychainDelegate {
+    return try FfiConverterTypeKeychainDelegate.lift(pointer)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKeychainDelegate_lower(_ value: KeychainDelegate) -> UnsafeMutableRawPointer {
+    return FfiConverterTypeKeychainDelegate.lower(value)
+}
+
+public protocol PasskeyDelegate: AnyObject {
+    func createCredential(rpId: String, userId: Data, userName: String) async throws -> PasskeyCredentialResult
+
+    func getAssertion(rpId: String, credentialId: Data, prfSalt: Data) async throws -> PasskeyAssertionResult
+
+    func isAvailable() -> Bool
+}
+
+open class PasskeyDelegateImpl:
+    PasskeyDelegate
+{
+    fileprivate let pointer: UnsafeMutableRawPointer!
+
+    // Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public struct NoPointer {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+    public required init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public init(noPointer _: NoPointer) {
+        pointer = nil
+    }
+
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_privacy_boost_ios_fn_clone_passkeydelegate(self.pointer, $0) }
+    }
+
+    // No primary constructor declared for this class.
+
+    deinit {
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_privacy_boost_ios_fn_free_passkeydelegate(pointer, $0) }
+    }
+
+    open func createCredential(rpId: String, userId: Data, userName: String) async throws -> PasskeyCredentialResult {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_passkeydelegate_create_credential(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(rpId), FfiConverterData.lower(userId), FfiConverterString.lower(userName)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterTypePasskeyCredentialResult.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+
+    open func getAssertion(rpId: String, credentialId: Data, prfSalt: Data) async throws -> PasskeyAssertionResult {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_passkeydelegate_get_assertion(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(rpId), FfiConverterData.lower(credentialId), FfiConverterData.lower(prfSalt)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterTypePasskeyAssertionResult.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+
+    open func isAvailable() -> Bool {
+        return try! FfiConverterBool.lift(try! rustCall {
+            uniffi_privacy_boost_ios_fn_method_passkeydelegate_is_available(self.uniffiClonePointer(), $0)
+        })
+    }
+}
+
+/// Put the implementation in a struct so we don't pollute the top-level namespace
+private enum UniffiCallbackInterfacePasskeyDelegate {
+    /// Create the VTable using a series of closures.
+    /// Swift automatically converts these into C callback functions.
+    static var vtable: UniffiVTableCallbackInterfacePasskeyDelegate = .init(
+        createCredential: { (
+            uniffiHandle: UInt64,
+            rpId: RustBuffer,
+            userId: RustBuffer,
+            userName: RustBuffer,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteRustBuffer,
+            uniffiCallbackData: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<UniffiForeignFuture>
+        ) in
+            let makeCall = {
+                () async throws -> PasskeyCredentialResult in
+                guard let uniffiObj = try? FfiConverterTypePasskeyDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.createCredential(
+                    rpId: FfiConverterString.lift(rpId),
+                    userId: FfiConverterData.lift(userId),
+                    userName: FfiConverterString.lift(userName)
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: PasskeyCredentialResult) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: FfiConverterTypePasskeyCredentialResult.lower(returnValue),
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { statusCode, errorBuf in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: RustBuffer.empty(),
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            let uniffiForeignFuture = uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeSDKError.lower
+            )
+            uniffiOutReturn.pointee = uniffiForeignFuture
+        },
+        getAssertion: { (
+            uniffiHandle: UInt64,
+            rpId: RustBuffer,
+            credentialId: RustBuffer,
+            prfSalt: RustBuffer,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteRustBuffer,
+            uniffiCallbackData: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<UniffiForeignFuture>
+        ) in
+            let makeCall = {
+                () async throws -> PasskeyAssertionResult in
+                guard let uniffiObj = try? FfiConverterTypePasskeyDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.getAssertion(
+                    rpId: FfiConverterString.lift(rpId),
+                    credentialId: FfiConverterData.lift(credentialId),
+                    prfSalt: FfiConverterData.lift(prfSalt)
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: PasskeyAssertionResult) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: FfiConverterTypePasskeyAssertionResult.lower(returnValue),
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { statusCode, errorBuf in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: RustBuffer.empty(),
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            let uniffiForeignFuture = uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeSDKError.lower
+            )
+            uniffiOutReturn.pointee = uniffiForeignFuture
+        },
+        isAvailable: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<Int8>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> Bool in
+                guard let uniffiObj = try? FfiConverterTypePasskeyDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.isAvailable(
+                )
+            }
+
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterBool.lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        uniffiFree: { (uniffiHandle: UInt64) in
+            let result = try? FfiConverterTypePasskeyDelegate.handleMap.remove(handle: uniffiHandle)
+            if result == nil {
+                print("Uniffi callback interface PasskeyDelegate: handle missing in uniffiFree")
+            }
+        }
+    )
+}
+
+private func uniffiCallbackInitPasskeyDelegate() {
+    uniffi_privacy_boost_ios_fn_init_callback_vtable_passkeydelegate(&UniffiCallbackInterfacePasskeyDelegate.vtable)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePasskeyDelegate: FfiConverter {
+    fileprivate static var handleMap = UniffiHandleMap<PasskeyDelegate>()
+
+    typealias FfiType = UnsafeMutableRawPointer
+    typealias SwiftType = PasskeyDelegate
+
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> PasskeyDelegate {
+        return PasskeyDelegateImpl(unsafeFromRawPointer: pointer)
+    }
+
+    public static func lower(_ value: PasskeyDelegate) -> UnsafeMutableRawPointer {
+        guard let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: handleMap.insert(obj: value))) else {
+            fatalError("Cast to UnsafeMutableRawPointer failed")
+        }
+        return ptr
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PasskeyDelegate {
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if ptr == nil {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
+    }
+
+    public static func write(_ value: PasskeyDelegate, into buf: inout [UInt8]) {
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypePasskeyDelegate_lift(_ pointer: UnsafeMutableRawPointer) throws -> PasskeyDelegate {
+    return try FfiConverterTypePasskeyDelegate.lift(pointer)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypePasskeyDelegate_lower(_ value: PasskeyDelegate) -> UnsafeMutableRawPointer {
+    return FfiConverterTypePasskeyDelegate.lower(value)
+}
+
+public protocol PrivacyBoostProtocol: AnyObject {
+    func authenticate(wallet: WalletDelegate, keySource: KeySource?, tokenProvider: TokenProvider?) async throws -> AuthResult
+
+    func clearSession()
+
+    func deposit(tokenAddress: String, amount: String) async throws -> DepositResult
+
+    func exportSession() -> ExportedSession?
+
+    func formatAmount(wei: String, decimals: UInt8) throws -> String
+
+    func getAllBalances() async throws -> [TokenBalance]
+
+    func getBalance(tokenAddress: String) async throws -> TokenBalance
+
+    func getFees() async throws -> FeeRates
+
+    func getMpk() -> String?
+
+    func getPrivacyAddress() -> String?
+
+    func getRegisteredTokens() throws -> [RegisteredToken]
+
+    func getTransactionHistory(txType: String?, tokenAddress: String?, limit: UInt32?) async throws -> [Transaction]
+
+    func getWalletAddress() -> String?
+
+    func importSession(session: ExportedSession) throws -> Bool
+
+    func isAuthenticated() -> Bool
+
+    func isConnected() -> Bool
+
+    func isValidAddress(address: String) -> Bool
+
+    func isValidPrivacyAddress(address: String) -> Bool
+
+    func logout()
+
+    func parseAmount(amount: String, decimals: UInt8) throws -> String
+
+    func searchAddress(identifier: String) async throws -> IdentityResult
+
+    func send(tokenAddress: String, amount: String, recipientPrivacyAddress: String) async throws -> TransferResult
+
+    func setBiometricDelegate(delegate: BiometricDelegate)
+
+    func setKeychainDelegate(delegate: KeychainDelegate)
+
+    func setPasskeyDelegate(delegate: PasskeyDelegate)
+
+    func submitCredential(credential: String, tokenProvider: TokenProvider?) async throws -> LoginResult
+
+    func withdraw(tokenAddress: String, amount: String, recipient: String) async throws -> WithdrawResult
+}
+
+open class PrivacyBoost:
+    PrivacyBoostProtocol
+{
+    fileprivate let pointer: UnsafeMutableRawPointer!
+
+    // Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public struct NoPointer {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+    public required init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public init(noPointer _: NoPointer) {
+        pointer = nil
+    }
+
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_privacy_boost_ios_fn_clone_privacyboost(self.pointer, $0) }
+    }
+
+    public convenience init(config: PrivacyBoostConfig) throws {
+        let pointer =
+            try rustCallWithError(FfiConverterTypeSDKError.lift) {
+                uniffi_privacy_boost_ios_fn_constructor_privacyboost_new(
+                    FfiConverterTypePrivacyBoostConfig.lower(config), $0
+                )
+            }
+        self.init(unsafeFromRawPointer: pointer)
+    }
+
+    deinit {
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_privacy_boost_ios_fn_free_privacyboost(pointer, $0) }
+    }
+
+    open func authenticate(wallet: WalletDelegate, keySource: KeySource?, tokenProvider: TokenProvider?) async throws -> AuthResult {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_privacyboost_authenticate(
+                        self.uniffiClonePointer(),
+                        FfiConverterTypeWalletDelegate.lower(wallet), FfiConverterOptionTypeKeySource.lower(keySource), FfiConverterOptionTypeTokenProvider.lower(tokenProvider)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterTypeAuthResult.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+
+    open func clearSession() {
+        try! rustCall {
+            uniffi_privacy_boost_ios_fn_method_privacyboost_clear_session(self.uniffiClonePointer(), $0)
+        }
+    }
+
+    open func deposit(tokenAddress: String, amount: String) async throws -> DepositResult {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_privacyboost_deposit(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(tokenAddress), FfiConverterString.lower(amount)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterTypeDepositResult.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+
+    open func exportSession() -> ExportedSession? {
+        return try! FfiConverterOptionTypeExportedSession.lift(try! rustCall {
+            uniffi_privacy_boost_ios_fn_method_privacyboost_export_session(self.uniffiClonePointer(), $0)
+        })
+    }
+
+    open func formatAmount(wei: String, decimals: UInt8) throws -> String {
+        return try FfiConverterString.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
+            uniffi_privacy_boost_ios_fn_method_privacyboost_format_amount(self.uniffiClonePointer(),
+                                                                          FfiConverterString.lower(wei),
+                                                                          FfiConverterUInt8.lower(decimals), $0)
+        })
+    }
+
+    open func getAllBalances() async throws -> [TokenBalance] {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_privacyboost_get_all_balances(
+                        self.uniffiClonePointer()
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterSequenceTypeTokenBalance.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+
+    open func getBalance(tokenAddress: String) async throws -> TokenBalance {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_privacyboost_get_balance(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(tokenAddress)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterTypeTokenBalance.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+
+    open func getFees() async throws -> FeeRates {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_privacyboost_get_fees(
+                        self.uniffiClonePointer()
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterTypeFeeRates.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+
+    open func getMpk() -> String? {
+        return try! FfiConverterOptionString.lift(try! rustCall {
+            uniffi_privacy_boost_ios_fn_method_privacyboost_get_mpk(self.uniffiClonePointer(), $0)
+        })
+    }
+
+    open func getPrivacyAddress() -> String? {
+        return try! FfiConverterOptionString.lift(try! rustCall {
+            uniffi_privacy_boost_ios_fn_method_privacyboost_get_privacy_address(self.uniffiClonePointer(), $0)
+        })
+    }
+
+    open func getRegisteredTokens() throws -> [RegisteredToken] {
+        return try FfiConverterSequenceTypeRegisteredToken.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
+            uniffi_privacy_boost_ios_fn_method_privacyboost_get_registered_tokens(self.uniffiClonePointer(), $0)
+        })
+    }
+
+    open func getTransactionHistory(txType: String?, tokenAddress: String?, limit: UInt32?) async throws -> [Transaction] {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_privacyboost_get_transaction_history(
+                        self.uniffiClonePointer(),
+                        FfiConverterOptionString.lower(txType), FfiConverterOptionString.lower(tokenAddress), FfiConverterOptionUInt32.lower(limit)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterSequenceTypeTransaction.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+
+    open func getWalletAddress() -> String? {
+        return try! FfiConverterOptionString.lift(try! rustCall {
+            uniffi_privacy_boost_ios_fn_method_privacyboost_get_wallet_address(self.uniffiClonePointer(), $0)
+        })
+    }
+
+    open func importSession(session: ExportedSession) throws -> Bool {
+        return try FfiConverterBool.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
+            uniffi_privacy_boost_ios_fn_method_privacyboost_import_session(self.uniffiClonePointer(),
+                                                                           FfiConverterTypeExportedSession.lower(session), $0)
+        })
+    }
+
+    open func isAuthenticated() -> Bool {
+        return try! FfiConverterBool.lift(try! rustCall {
+            uniffi_privacy_boost_ios_fn_method_privacyboost_is_authenticated(self.uniffiClonePointer(), $0)
+        })
+    }
+
+    open func isConnected() -> Bool {
+        return try! FfiConverterBool.lift(try! rustCall {
+            uniffi_privacy_boost_ios_fn_method_privacyboost_is_connected(self.uniffiClonePointer(), $0)
+        })
+    }
+
+    open func isValidAddress(address: String) -> Bool {
+        return try! FfiConverterBool.lift(try! rustCall {
+            uniffi_privacy_boost_ios_fn_method_privacyboost_is_valid_address(self.uniffiClonePointer(),
+                                                                             FfiConverterString.lower(address), $0)
+        })
+    }
+
+    open func isValidPrivacyAddress(address: String) -> Bool {
+        return try! FfiConverterBool.lift(try! rustCall {
+            uniffi_privacy_boost_ios_fn_method_privacyboost_is_valid_privacy_address(self.uniffiClonePointer(),
+                                                                                     FfiConverterString.lower(address), $0)
+        })
+    }
+
+    open func logout() {
+        try! rustCall {
+            uniffi_privacy_boost_ios_fn_method_privacyboost_logout(self.uniffiClonePointer(), $0)
+        }
+    }
+
+    open func parseAmount(amount: String, decimals: UInt8) throws -> String {
+        return try FfiConverterString.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
+            uniffi_privacy_boost_ios_fn_method_privacyboost_parse_amount(self.uniffiClonePointer(),
+                                                                         FfiConverterString.lower(amount),
+                                                                         FfiConverterUInt8.lower(decimals), $0)
+        })
+    }
+
+    open func searchAddress(identifier: String) async throws -> IdentityResult {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_privacyboost_search_address(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(identifier)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterTypeIdentityResult.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+
+    open func send(tokenAddress: String, amount: String, recipientPrivacyAddress: String) async throws -> TransferResult {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_privacyboost_send(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(tokenAddress), FfiConverterString.lower(amount), FfiConverterString.lower(recipientPrivacyAddress)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterTypeTransferResult.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+
+    open func setBiometricDelegate(delegate: BiometricDelegate) {
+        try! rustCall {
+            uniffi_privacy_boost_ios_fn_method_privacyboost_set_biometric_delegate(self.uniffiClonePointer(),
+                                                                                   FfiConverterTypeBiometricDelegate.lower(delegate), $0)
+        }
+    }
+
+    open func setKeychainDelegate(delegate: KeychainDelegate) {
+        try! rustCall {
+            uniffi_privacy_boost_ios_fn_method_privacyboost_set_keychain_delegate(self.uniffiClonePointer(),
+                                                                                  FfiConverterTypeKeychainDelegate.lower(delegate), $0)
+        }
+    }
+
+    open func setPasskeyDelegate(delegate: PasskeyDelegate) {
+        try! rustCall {
+            uniffi_privacy_boost_ios_fn_method_privacyboost_set_passkey_delegate(self.uniffiClonePointer(),
+                                                                                 FfiConverterTypePasskeyDelegate.lower(delegate), $0)
+        }
+    }
+
+    open func submitCredential(credential: String, tokenProvider: TokenProvider?) async throws -> LoginResult {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_privacyboost_submit_credential(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(credential), FfiConverterOptionTypeTokenProvider.lower(tokenProvider)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterTypeLoginResult.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+
+    open func withdraw(tokenAddress: String, amount: String, recipient: String) async throws -> WithdrawResult {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_privacyboost_withdraw(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(tokenAddress), FfiConverterString.lower(amount), FfiConverterString.lower(recipient)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterTypeWithdrawResult.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePrivacyBoost: FfiConverter {
+    typealias FfiType = UnsafeMutableRawPointer
+    typealias SwiftType = PrivacyBoost
+
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> PrivacyBoost {
+        return PrivacyBoost(unsafeFromRawPointer: pointer)
+    }
+
+    public static func lower(_ value: PrivacyBoost) -> UnsafeMutableRawPointer {
+        return value.uniffiClonePointer()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PrivacyBoost {
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if ptr == nil {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
+    }
+
+    public static func write(_ value: PrivacyBoost, into buf: inout [UInt8]) {
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypePrivacyBoost_lift(_ pointer: UnsafeMutableRawPointer) throws -> PrivacyBoost {
+    return try FfiConverterTypePrivacyBoost.lift(pointer)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypePrivacyBoost_lower(_ value: PrivacyBoost) -> UnsafeMutableRawPointer {
+    return FfiConverterTypePrivacyBoost.lower(value)
+}
+
+public protocol TokenProvider: AnyObject {
+    func getToken(loginPayloadJson: String) async throws -> TokenResponse
+}
+
+open class TokenProviderImpl:
+    TokenProvider
+{
+    fileprivate let pointer: UnsafeMutableRawPointer!
+
+    // Used to instantiate a [FFIObject] without an actual pointer, for fakes in tests, mostly.
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public struct NoPointer {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+    public required init(unsafeFromRawPointer pointer: UnsafeMutableRawPointer) {
+        self.pointer = pointer
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noPointer: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing [Pointer] the FFI lower functions will crash.
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public init(noPointer _: NoPointer) {
+        pointer = nil
+    }
+
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public func uniffiClonePointer() -> UnsafeMutableRawPointer {
+        return try! rustCall { uniffi_privacy_boost_ios_fn_clone_tokenprovider(self.pointer, $0) }
+    }
+
+    // No primary constructor declared for this class.
+
+    deinit {
+        guard let pointer = pointer else {
+            return
+        }
+
+        try! rustCall { uniffi_privacy_boost_ios_fn_free_tokenprovider(pointer, $0) }
+    }
+
+    open func getToken(loginPayloadJson: String) async throws -> TokenResponse {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_tokenprovider_get_token(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(loginPayloadJson)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterTypeTokenResponse.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+}
+
+/// Put the implementation in a struct so we don't pollute the top-level namespace
+private enum UniffiCallbackInterfaceTokenProvider {
+    /// Create the VTable using a series of closures.
+    /// Swift automatically converts these into C callback functions.
+    static var vtable: UniffiVTableCallbackInterfaceTokenProvider = .init(
+        getToken: { (
+            uniffiHandle: UInt64,
+            loginPayloadJson: RustBuffer,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteRustBuffer,
+            uniffiCallbackData: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<UniffiForeignFuture>
+        ) in
+            let makeCall = {
+                () async throws -> TokenResponse in
+                guard let uniffiObj = try? FfiConverterTypeTokenProvider.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.getToken(
+                    loginPayloadJson: FfiConverterString.lift(loginPayloadJson)
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: TokenResponse) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: FfiConverterTypeTokenResponse.lower(returnValue),
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { statusCode, errorBuf in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: RustBuffer.empty(),
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            let uniffiForeignFuture = uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeSDKError.lower
+            )
+            uniffiOutReturn.pointee = uniffiForeignFuture
+        },
+        uniffiFree: { (uniffiHandle: UInt64) in
+            let result = try? FfiConverterTypeTokenProvider.handleMap.remove(handle: uniffiHandle)
+            if result == nil {
+                print("Uniffi callback interface TokenProvider: handle missing in uniffiFree")
+            }
+        }
+    )
+}
+
+private func uniffiCallbackInitTokenProvider() {
+    uniffi_privacy_boost_ios_fn_init_callback_vtable_tokenprovider(&UniffiCallbackInterfaceTokenProvider.vtable)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTokenProvider: FfiConverter {
+    fileprivate static var handleMap = UniffiHandleMap<TokenProvider>()
+
+    typealias FfiType = UnsafeMutableRawPointer
+    typealias SwiftType = TokenProvider
+
+    public static func lift(_ pointer: UnsafeMutableRawPointer) throws -> TokenProvider {
+        return TokenProviderImpl(unsafeFromRawPointer: pointer)
+    }
+
+    public static func lower(_ value: TokenProvider) -> UnsafeMutableRawPointer {
+        guard let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: handleMap.insert(obj: value))) else {
+            fatalError("Cast to UnsafeMutableRawPointer failed")
+        }
+        return ptr
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TokenProvider {
+        let v: UInt64 = try readInt(&buf)
+        // The Rust code won't compile if a pointer won't fit in a UInt64.
+        // We have to go via `UInt` because that's the thing that's the size of a pointer.
+        let ptr = UnsafeMutableRawPointer(bitPattern: UInt(truncatingIfNeeded: v))
+        if ptr == nil {
+            throw UniffiInternalError.unexpectedNullPointer
+        }
+        return try lift(ptr!)
+    }
+
+    public static func write(_ value: TokenProvider, into buf: inout [UInt8]) {
+        // This fiddling is because `Int` is the thing that's the same size as a pointer.
+        // The Rust code won't compile if a pointer won't fit in a `UInt64`.
+        writeInt(&buf, UInt64(bitPattern: Int64(Int(bitPattern: lower(value)))))
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTokenProvider_lift(_ pointer: UnsafeMutableRawPointer) throws -> TokenProvider {
+    return try FfiConverterTypeTokenProvider.lift(pointer)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTokenProvider_lower(_ value: TokenProvider) -> UnsafeMutableRawPointer {
+    return FfiConverterTypeTokenProvider.lower(value)
 }
 
 public protocol WalletDelegate: AnyObject {
-    func getAddress() throws -> String
+    func getAddress() async throws -> String
 
-    func getChainId() throws -> UInt64
+    func getChainId() async throws -> UInt64
 
-    func sendTransaction(toAddress: String, value: String, data: String) throws -> String
+    func sendTransaction(toAddress: String, value: String, data: String) async throws -> String
 
-    func signMessage(message: String) throws -> String
+    func signMessage(message: String) async throws -> String
 
-    func signTypedData(typedDataJson: String) throws -> String
+    func signTypedData(typedDataJson: String) async throws -> String
 }
 
 open class WalletDelegateImpl:
@@ -873,49 +2374,89 @@ open class WalletDelegateImpl:
         try! rustCall { uniffi_privacy_boost_ios_fn_free_walletdelegate(pointer, $0) }
     }
 
-    open func getAddress() throws -> String {
-        return try FfiConverterString.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
-            uniffi_privacy_boost_ios_fn_method_walletdelegate_get_address(self.uniffiClonePointer(), $0)
-        })
+    open func getAddress() async throws -> String {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_walletdelegate_get_address(
+                        self.uniffiClonePointer()
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterString.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
     }
 
-    open func getChainId() throws -> UInt64 {
-        return try FfiConverterUInt64.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
-            uniffi_privacy_boost_ios_fn_method_walletdelegate_get_chain_id(self.uniffiClonePointer(), $0)
-        })
+    open func getChainId() async throws -> UInt64 {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_walletdelegate_get_chain_id(
+                        self.uniffiClonePointer()
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_u64,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_u64,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_u64,
+                liftFunc: FfiConverterUInt64.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
     }
 
-    open func sendTransaction(toAddress: String, value: String, data: String) throws -> String {
-        return try FfiConverterString.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
-            uniffi_privacy_boost_ios_fn_method_walletdelegate_send_transaction(self.uniffiClonePointer(),
-                                                                               FfiConverterString.lower(toAddress),
-                                                                               FfiConverterString.lower(value),
-                                                                               FfiConverterString.lower(data), $0)
-        })
+    open func sendTransaction(toAddress: String, value: String, data: String) async throws -> String {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_walletdelegate_send_transaction(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(toAddress), FfiConverterString.lower(value), FfiConverterString.lower(data)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterString.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
     }
 
-    open func signMessage(message: String) throws -> String {
-        return try FfiConverterString.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
-            uniffi_privacy_boost_ios_fn_method_walletdelegate_sign_message(self.uniffiClonePointer(),
-                                                                           FfiConverterString.lower(message), $0)
-        })
+    open func signMessage(message: String) async throws -> String {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_walletdelegate_sign_message(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(message)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterString.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
     }
 
-    open func signTypedData(typedDataJson: String) throws -> String {
-        return try FfiConverterString.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
-            uniffi_privacy_boost_ios_fn_method_walletdelegate_sign_typed_data(self.uniffiClonePointer(),
-                                                                              FfiConverterString.lower(typedDataJson), $0)
-        })
+    open func signTypedData(typedDataJson: String) async throws -> String {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_walletdelegate_sign_typed_data(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(typedDataJson)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterString.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
     }
 }
-
-/// Magic number for the Rust proxy to call using the same mechanism as every other method,
-/// to free the callback once it's dropped by Rust.
-private let IDX_CALLBACK_FREE: Int32 = 0
-// Callback return codes
-private let UNIFFI_CALLBACK_SUCCESS: Int32 = 0
-private let UNIFFI_CALLBACK_ERROR: Int32 = 1
-private let UNIFFI_CALLBACK_UNEXPECTED_ERROR: Int32 = 2
 
 /// Put the implementation in a struct so we don't pollute the top-level namespace
 private enum UniffiCallbackInterfaceWalletDelegate {
@@ -924,123 +2465,218 @@ private enum UniffiCallbackInterfaceWalletDelegate {
     static var vtable: UniffiVTableCallbackInterfaceWalletDelegate = .init(
         getAddress: { (
             uniffiHandle: UInt64,
-            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteRustBuffer,
+            uniffiCallbackData: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<UniffiForeignFuture>
         ) in
             let makeCall = {
-                () throws -> String in
+                () async throws -> String in
                 guard let uniffiObj = try? FfiConverterTypeWalletDelegate.handleMap.get(handle: uniffiHandle) else {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
-                return try uniffiObj.getAddress(
+                return try await uniffiObj.getAddress(
                 )
             }
 
-            let writeReturn = { uniffiOutReturn.pointee = FfiConverterString.lower($0) }
-            uniffiTraitInterfaceCallWithError(
-                callStatus: uniffiCallStatus,
+            let uniffiHandleSuccess = { (returnValue: String) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: FfiConverterString.lower(returnValue),
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { statusCode, errorBuf in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: RustBuffer.empty(),
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            let uniffiForeignFuture = uniffiTraitInterfaceCallAsyncWithError(
                 makeCall: makeCall,
-                writeReturn: writeReturn,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
                 lowerError: FfiConverterTypeSDKError.lower
             )
+            uniffiOutReturn.pointee = uniffiForeignFuture
         },
         getChainId: { (
             uniffiHandle: UInt64,
-            uniffiOutReturn: UnsafeMutablePointer<UInt64>,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteU64,
+            uniffiCallbackData: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<UniffiForeignFuture>
         ) in
             let makeCall = {
-                () throws -> UInt64 in
+                () async throws -> UInt64 in
                 guard let uniffiObj = try? FfiConverterTypeWalletDelegate.handleMap.get(handle: uniffiHandle) else {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
-                return try uniffiObj.getChainId(
+                return try await uniffiObj.getChainId(
                 )
             }
 
-            let writeReturn = { uniffiOutReturn.pointee = FfiConverterUInt64.lower($0) }
-            uniffiTraitInterfaceCallWithError(
-                callStatus: uniffiCallStatus,
+            let uniffiHandleSuccess = { (returnValue: UInt64) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructU64(
+                        returnValue: FfiConverterUInt64.lower(returnValue),
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { statusCode, errorBuf in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructU64(
+                        returnValue: 0,
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            let uniffiForeignFuture = uniffiTraitInterfaceCallAsyncWithError(
                 makeCall: makeCall,
-                writeReturn: writeReturn,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
                 lowerError: FfiConverterTypeSDKError.lower
             )
+            uniffiOutReturn.pointee = uniffiForeignFuture
         },
         sendTransaction: { (
             uniffiHandle: UInt64,
             toAddress: RustBuffer,
             value: RustBuffer,
             data: RustBuffer,
-            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteRustBuffer,
+            uniffiCallbackData: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<UniffiForeignFuture>
         ) in
             let makeCall = {
-                () throws -> String in
+                () async throws -> String in
                 guard let uniffiObj = try? FfiConverterTypeWalletDelegate.handleMap.get(handle: uniffiHandle) else {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
-                return try uniffiObj.sendTransaction(
+                return try await uniffiObj.sendTransaction(
                     toAddress: FfiConverterString.lift(toAddress),
                     value: FfiConverterString.lift(value),
                     data: FfiConverterString.lift(data)
                 )
             }
 
-            let writeReturn = { uniffiOutReturn.pointee = FfiConverterString.lower($0) }
-            uniffiTraitInterfaceCallWithError(
-                callStatus: uniffiCallStatus,
+            let uniffiHandleSuccess = { (returnValue: String) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: FfiConverterString.lower(returnValue),
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { statusCode, errorBuf in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: RustBuffer.empty(),
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            let uniffiForeignFuture = uniffiTraitInterfaceCallAsyncWithError(
                 makeCall: makeCall,
-                writeReturn: writeReturn,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
                 lowerError: FfiConverterTypeSDKError.lower
             )
+            uniffiOutReturn.pointee = uniffiForeignFuture
         },
         signMessage: { (
             uniffiHandle: UInt64,
             message: RustBuffer,
-            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteRustBuffer,
+            uniffiCallbackData: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<UniffiForeignFuture>
         ) in
             let makeCall = {
-                () throws -> String in
+                () async throws -> String in
                 guard let uniffiObj = try? FfiConverterTypeWalletDelegate.handleMap.get(handle: uniffiHandle) else {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
-                return try uniffiObj.signMessage(
+                return try await uniffiObj.signMessage(
                     message: FfiConverterString.lift(message)
                 )
             }
 
-            let writeReturn = { uniffiOutReturn.pointee = FfiConverterString.lower($0) }
-            uniffiTraitInterfaceCallWithError(
-                callStatus: uniffiCallStatus,
+            let uniffiHandleSuccess = { (returnValue: String) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: FfiConverterString.lower(returnValue),
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { statusCode, errorBuf in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: RustBuffer.empty(),
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            let uniffiForeignFuture = uniffiTraitInterfaceCallAsyncWithError(
                 makeCall: makeCall,
-                writeReturn: writeReturn,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
                 lowerError: FfiConverterTypeSDKError.lower
             )
+            uniffiOutReturn.pointee = uniffiForeignFuture
         },
         signTypedData: { (
             uniffiHandle: UInt64,
             typedDataJson: RustBuffer,
-            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteRustBuffer,
+            uniffiCallbackData: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<UniffiForeignFuture>
         ) in
             let makeCall = {
-                () throws -> String in
+                () async throws -> String in
                 guard let uniffiObj = try? FfiConverterTypeWalletDelegate.handleMap.get(handle: uniffiHandle) else {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
-                return try uniffiObj.signTypedData(
+                return try await uniffiObj.signTypedData(
                     typedDataJson: FfiConverterString.lift(typedDataJson)
                 )
             }
 
-            let writeReturn = { uniffiOutReturn.pointee = FfiConverterString.lower($0) }
-            uniffiTraitInterfaceCallWithError(
-                callStatus: uniffiCallStatus,
+            let uniffiHandleSuccess = { (returnValue: String) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: FfiConverterString.lower(returnValue),
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { statusCode, errorBuf in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: RustBuffer.empty(),
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            let uniffiForeignFuture = uniffiTraitInterfaceCallAsyncWithError(
                 makeCall: makeCall,
-                writeReturn: writeReturn,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
                 lowerError: FfiConverterTypeSDKError.lower
             )
+            uniffiOutReturn.pointee = uniffiForeignFuture
         },
         uniffiFree: { (uniffiHandle: UInt64) in
             let result = try? FfiConverterTypeWalletDelegate.handleMap.remove(handle: uniffiHandle)
@@ -1107,86 +2743,208 @@ public func FfiConverterTypeWalletDelegate_lower(_ value: WalletDelegate) -> Uns
     return FfiConverterTypeWalletDelegate.lower(value)
 }
 
-public struct ConnectResult {
-    public var walletAddress: String
-    public var privacyAddress: String
-    public var mpk: String
+public struct BiometricAuthenticationResult {
+    public var success: Bool
+    public var deviceSecret: Data?
 
     /// Default memberwise initializers are never public by default, so we
     /// declare one manually.
-    public init(walletAddress: String, privacyAddress: String, mpk: String) {
-        self.walletAddress = walletAddress
-        self.privacyAddress = privacyAddress
-        self.mpk = mpk
+    public init(success: Bool, deviceSecret: Data?) {
+        self.success = success
+        self.deviceSecret = deviceSecret
     }
 }
 
-extension ConnectResult: Equatable, Hashable {
-    public static func == (lhs: ConnectResult, rhs: ConnectResult) -> Bool {
-        if lhs.walletAddress != rhs.walletAddress {
+extension BiometricAuthenticationResult: Equatable, Hashable {
+    public static func == (lhs: BiometricAuthenticationResult, rhs: BiometricAuthenticationResult) -> Bool {
+        if lhs.success != rhs.success {
             return false
         }
-        if lhs.privacyAddress != rhs.privacyAddress {
-            return false
-        }
-        if lhs.mpk != rhs.mpk {
+        if lhs.deviceSecret != rhs.deviceSecret {
             return false
         }
         return true
     }
 
     public func hash(into hasher: inout Hasher) {
-        hasher.combine(walletAddress)
-        hasher.combine(privacyAddress)
-        hasher.combine(mpk)
+        hasher.combine(success)
+        hasher.combine(deviceSecret)
     }
 }
 
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeConnectResult: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ConnectResult {
+public struct FfiConverterTypeBiometricAuthenticationResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BiometricAuthenticationResult {
         return
-            try ConnectResult(
-                walletAddress: FfiConverterString.read(from: &buf),
-                privacyAddress: FfiConverterString.read(from: &buf),
-                mpk: FfiConverterString.read(from: &buf)
+            try BiometricAuthenticationResult(
+                success: FfiConverterBool.read(from: &buf),
+                deviceSecret: FfiConverterOptionData.read(from: &buf)
             )
     }
 
-    public static func write(_ value: ConnectResult, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.walletAddress, into: &buf)
-        FfiConverterString.write(value.privacyAddress, into: &buf)
-        FfiConverterString.write(value.mpk, into: &buf)
+    public static func write(_ value: BiometricAuthenticationResult, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.success, into: &buf)
+        FfiConverterOptionData.write(value.deviceSecret, into: &buf)
     }
 }
 
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeConnectResult_lift(_ buf: RustBuffer) throws -> ConnectResult {
-    return try FfiConverterTypeConnectResult.lift(buf)
+public func FfiConverterTypeBiometricAuthenticationResult_lift(_ buf: RustBuffer) throws -> BiometricAuthenticationResult {
+    return try FfiConverterTypeBiometricAuthenticationResult.lift(buf)
 }
 
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeConnectResult_lower(_ value: ConnectResult) -> RustBuffer {
-    return FfiConverterTypeConnectResult.lower(value)
+public func FfiConverterTypeBiometricAuthenticationResult_lower(_ value: BiometricAuthenticationResult) -> RustBuffer {
+    return FfiConverterTypeBiometricAuthenticationResult.lower(value)
+}
+
+public struct BiometricCapabilityResult {
+    public var available: Bool
+    public var enrolled: Bool
+    public var biometricType: String
+
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
+    public init(available: Bool, enrolled: Bool, biometricType: String) {
+        self.available = available
+        self.enrolled = enrolled
+        self.biometricType = biometricType
+    }
+}
+
+extension BiometricCapabilityResult: Equatable, Hashable {
+    public static func == (lhs: BiometricCapabilityResult, rhs: BiometricCapabilityResult) -> Bool {
+        if lhs.available != rhs.available {
+            return false
+        }
+        if lhs.enrolled != rhs.enrolled {
+            return false
+        }
+        if lhs.biometricType != rhs.biometricType {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(available)
+        hasher.combine(enrolled)
+        hasher.combine(biometricType)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBiometricCapabilityResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BiometricCapabilityResult {
+        return
+            try BiometricCapabilityResult(
+                available: FfiConverterBool.read(from: &buf),
+                enrolled: FfiConverterBool.read(from: &buf),
+                biometricType: FfiConverterString.read(from: &buf)
+            )
+    }
+
+    public static func write(_ value: BiometricCapabilityResult, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.available, into: &buf)
+        FfiConverterBool.write(value.enrolled, into: &buf)
+        FfiConverterString.write(value.biometricType, into: &buf)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBiometricCapabilityResult_lift(_ buf: RustBuffer) throws -> BiometricCapabilityResult {
+    return try FfiConverterTypeBiometricCapabilityResult.lift(buf)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBiometricCapabilityResult_lower(_ value: BiometricCapabilityResult) -> RustBuffer {
+    return FfiConverterTypeBiometricCapabilityResult.lower(value)
+}
+
+public struct CredentialChallenge {
+    public var action: CredentialAction
+    public var unlockType: UnlockMethod
+
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
+    public init(action: CredentialAction, unlockType: UnlockMethod) {
+        self.action = action
+        self.unlockType = unlockType
+    }
+}
+
+extension CredentialChallenge: Equatable, Hashable {
+    public static func == (lhs: CredentialChallenge, rhs: CredentialChallenge) -> Bool {
+        if lhs.action != rhs.action {
+            return false
+        }
+        if lhs.unlockType != rhs.unlockType {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(action)
+        hasher.combine(unlockType)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCredentialChallenge: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CredentialChallenge {
+        return
+            try CredentialChallenge(
+                action: FfiConverterTypeCredentialAction.read(from: &buf),
+                unlockType: FfiConverterTypeUnlockMethod.read(from: &buf)
+            )
+    }
+
+    public static func write(_ value: CredentialChallenge, into buf: inout [UInt8]) {
+        FfiConverterTypeCredentialAction.write(value.action, into: &buf)
+        FfiConverterTypeUnlockMethod.write(value.unlockType, into: &buf)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCredentialChallenge_lift(_ buf: RustBuffer) throws -> CredentialChallenge {
+    return try FfiConverterTypeCredentialChallenge.lift(buf)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCredentialChallenge_lower(_ value: CredentialChallenge) -> RustBuffer {
+    return FfiConverterTypeCredentialChallenge.lower(value)
 }
 
 public struct DepositResult {
     public var txHash: String
     public var commitment: String
-    public var fee: String
+    public var warning: String?
 
     /// Default memberwise initializers are never public by default, so we
     /// declare one manually.
-    public init(txHash: String, commitment: String, fee: String) {
+    public init(txHash: String, commitment: String, warning: String?) {
         self.txHash = txHash
         self.commitment = commitment
-        self.fee = fee
+        self.warning = warning
     }
 }
 
@@ -1198,7 +2956,7 @@ extension DepositResult: Equatable, Hashable {
         if lhs.commitment != rhs.commitment {
             return false
         }
-        if lhs.fee != rhs.fee {
+        if lhs.warning != rhs.warning {
             return false
         }
         return true
@@ -1207,7 +2965,7 @@ extension DepositResult: Equatable, Hashable {
     public func hash(into hasher: inout Hasher) {
         hasher.combine(txHash)
         hasher.combine(commitment)
-        hasher.combine(fee)
+        hasher.combine(warning)
     }
 }
 
@@ -1220,14 +2978,14 @@ public struct FfiConverterTypeDepositResult: FfiConverterRustBuffer {
             try DepositResult(
                 txHash: FfiConverterString.read(from: &buf),
                 commitment: FfiConverterString.read(from: &buf),
-                fee: FfiConverterString.read(from: &buf)
+                warning: FfiConverterOptionString.read(from: &buf)
             )
     }
 
     public static func write(_ value: DepositResult, into buf: inout [UInt8]) {
         FfiConverterString.write(value.txHash, into: &buf)
         FfiConverterString.write(value.commitment, into: &buf)
-        FfiConverterString.write(value.fee, into: &buf)
+        FfiConverterOptionString.write(value.warning, into: &buf)
     }
 }
 
@@ -1255,15 +3013,14 @@ public struct ExportedSession {
     public var nullifyingPublicKeyX: String
     public var nullifyingPublicKeyY: String
     public var mpk: String
+    public var accountId: String
     public var jwt: String
     public var jwtExpiry: UInt64
     public var walletAddress: String
-    public var ethSignature: String
-    public var ethSignatureMessage: String
 
     /// Default memberwise initializers are never public by default, so we
     /// declare one manually.
-    public init(walletPublicKeyX: String, walletPublicKeyY: String, viewingKey: String, viewingPublicKeyX: String, viewingPublicKeyY: String, nullifyingKey: String, nullifyingPublicKeyX: String, nullifyingPublicKeyY: String, mpk: String, jwt: String, jwtExpiry: UInt64, walletAddress: String, ethSignature: String, ethSignatureMessage: String) {
+    public init(walletPublicKeyX: String, walletPublicKeyY: String, viewingKey: String, viewingPublicKeyX: String, viewingPublicKeyY: String, nullifyingKey: String, nullifyingPublicKeyX: String, nullifyingPublicKeyY: String, mpk: String, accountId: String, jwt: String, jwtExpiry: UInt64, walletAddress: String) {
         self.walletPublicKeyX = walletPublicKeyX
         self.walletPublicKeyY = walletPublicKeyY
         self.viewingKey = viewingKey
@@ -1273,11 +3030,10 @@ public struct ExportedSession {
         self.nullifyingPublicKeyX = nullifyingPublicKeyX
         self.nullifyingPublicKeyY = nullifyingPublicKeyY
         self.mpk = mpk
+        self.accountId = accountId
         self.jwt = jwt
         self.jwtExpiry = jwtExpiry
         self.walletAddress = walletAddress
-        self.ethSignature = ethSignature
-        self.ethSignatureMessage = ethSignatureMessage
     }
 }
 
@@ -1310,6 +3066,9 @@ extension ExportedSession: Equatable, Hashable {
         if lhs.mpk != rhs.mpk {
             return false
         }
+        if lhs.accountId != rhs.accountId {
+            return false
+        }
         if lhs.jwt != rhs.jwt {
             return false
         }
@@ -1317,12 +3076,6 @@ extension ExportedSession: Equatable, Hashable {
             return false
         }
         if lhs.walletAddress != rhs.walletAddress {
-            return false
-        }
-        if lhs.ethSignature != rhs.ethSignature {
-            return false
-        }
-        if lhs.ethSignatureMessage != rhs.ethSignatureMessage {
             return false
         }
         return true
@@ -1338,11 +3091,10 @@ extension ExportedSession: Equatable, Hashable {
         hasher.combine(nullifyingPublicKeyX)
         hasher.combine(nullifyingPublicKeyY)
         hasher.combine(mpk)
+        hasher.combine(accountId)
         hasher.combine(jwt)
         hasher.combine(jwtExpiry)
         hasher.combine(walletAddress)
-        hasher.combine(ethSignature)
-        hasher.combine(ethSignatureMessage)
     }
 }
 
@@ -1362,11 +3114,10 @@ public struct FfiConverterTypeExportedSession: FfiConverterRustBuffer {
                 nullifyingPublicKeyX: FfiConverterString.read(from: &buf),
                 nullifyingPublicKeyY: FfiConverterString.read(from: &buf),
                 mpk: FfiConverterString.read(from: &buf),
+                accountId: FfiConverterString.read(from: &buf),
                 jwt: FfiConverterString.read(from: &buf),
                 jwtExpiry: FfiConverterUInt64.read(from: &buf),
-                walletAddress: FfiConverterString.read(from: &buf),
-                ethSignature: FfiConverterString.read(from: &buf),
-                ethSignatureMessage: FfiConverterString.read(from: &buf)
+                walletAddress: FfiConverterString.read(from: &buf)
             )
     }
 
@@ -1380,11 +3131,10 @@ public struct FfiConverterTypeExportedSession: FfiConverterRustBuffer {
         FfiConverterString.write(value.nullifyingPublicKeyX, into: &buf)
         FfiConverterString.write(value.nullifyingPublicKeyY, into: &buf)
         FfiConverterString.write(value.mpk, into: &buf)
+        FfiConverterString.write(value.accountId, into: &buf)
         FfiConverterString.write(value.jwt, into: &buf)
         FfiConverterUInt64.write(value.jwtExpiry, into: &buf)
         FfiConverterString.write(value.walletAddress, into: &buf)
-        FfiConverterString.write(value.ethSignature, into: &buf)
-        FfiConverterString.write(value.ethSignatureMessage, into: &buf)
     }
 }
 
@@ -1402,18 +3152,77 @@ public func FfiConverterTypeExportedSession_lower(_ value: ExportedSession) -> R
     return FfiConverterTypeExportedSession.lower(value)
 }
 
+public struct FeeRates {
+    public var transferFeeBps: UInt16
+    public var withdrawFeeBps: UInt16
+
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
+    public init(transferFeeBps: UInt16, withdrawFeeBps: UInt16) {
+        self.transferFeeBps = transferFeeBps
+        self.withdrawFeeBps = withdrawFeeBps
+    }
+}
+
+extension FeeRates: Equatable, Hashable {
+    public static func == (lhs: FeeRates, rhs: FeeRates) -> Bool {
+        if lhs.transferFeeBps != rhs.transferFeeBps {
+            return false
+        }
+        if lhs.withdrawFeeBps != rhs.withdrawFeeBps {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(transferFeeBps)
+        hasher.combine(withdrawFeeBps)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFeeRates: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FeeRates {
+        return
+            try FeeRates(
+                transferFeeBps: FfiConverterUInt16.read(from: &buf),
+                withdrawFeeBps: FfiConverterUInt16.read(from: &buf)
+            )
+    }
+
+    public static func write(_ value: FeeRates, into buf: inout [UInt8]) {
+        FfiConverterUInt16.write(value.transferFeeBps, into: &buf)
+        FfiConverterUInt16.write(value.withdrawFeeBps, into: &buf)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFeeRates_lift(_ buf: RustBuffer) throws -> FeeRates {
+    return try FfiConverterTypeFeeRates.lift(buf)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFeeRates_lower(_ value: FeeRates) -> RustBuffer {
+    return FfiConverterTypeFeeRates.lower(value)
+}
+
 public struct IdentityResult {
     public var mpk: String
-    public var ethereumAddress: String
     public var viewingPublicKeyX: String
     public var viewingPublicKeyY: String
     public var privacyAddress: String
 
     /// Default memberwise initializers are never public by default, so we
     /// declare one manually.
-    public init(mpk: String, ethereumAddress: String, viewingPublicKeyX: String, viewingPublicKeyY: String, privacyAddress: String) {
+    public init(mpk: String, viewingPublicKeyX: String, viewingPublicKeyY: String, privacyAddress: String) {
         self.mpk = mpk
-        self.ethereumAddress = ethereumAddress
         self.viewingPublicKeyX = viewingPublicKeyX
         self.viewingPublicKeyY = viewingPublicKeyY
         self.privacyAddress = privacyAddress
@@ -1423,9 +3232,6 @@ public struct IdentityResult {
 extension IdentityResult: Equatable, Hashable {
     public static func == (lhs: IdentityResult, rhs: IdentityResult) -> Bool {
         if lhs.mpk != rhs.mpk {
-            return false
-        }
-        if lhs.ethereumAddress != rhs.ethereumAddress {
             return false
         }
         if lhs.viewingPublicKeyX != rhs.viewingPublicKeyX {
@@ -1442,7 +3248,6 @@ extension IdentityResult: Equatable, Hashable {
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(mpk)
-        hasher.combine(ethereumAddress)
         hasher.combine(viewingPublicKeyX)
         hasher.combine(viewingPublicKeyY)
         hasher.combine(privacyAddress)
@@ -1457,7 +3262,6 @@ public struct FfiConverterTypeIdentityResult: FfiConverterRustBuffer {
         return
             try IdentityResult(
                 mpk: FfiConverterString.read(from: &buf),
-                ethereumAddress: FfiConverterString.read(from: &buf),
                 viewingPublicKeyX: FfiConverterString.read(from: &buf),
                 viewingPublicKeyY: FfiConverterString.read(from: &buf),
                 privacyAddress: FfiConverterString.read(from: &buf)
@@ -1466,7 +3270,6 @@ public struct FfiConverterTypeIdentityResult: FfiConverterRustBuffer {
 
     public static func write(_ value: IdentityResult, into buf: inout [UInt8]) {
         FfiConverterString.write(value.mpk, into: &buf)
-        FfiConverterString.write(value.ethereumAddress, into: &buf)
         FfiConverterString.write(value.viewingPublicKeyX, into: &buf)
         FfiConverterString.write(value.viewingPublicKeyY, into: &buf)
         FfiConverterString.write(value.privacyAddress, into: &buf)
@@ -1548,30 +3351,155 @@ public func FfiConverterTypeLoginResult_lower(_ value: LoginResult) -> RustBuffe
     return FfiConverterTypeLoginResult.lower(value)
 }
 
-public struct SdkConfig {
-    public var indexerUrl: String
-    public var proverUrl: String
-    public var chainId: UInt64
-    public var shieldContract: String
-    public var wethContract: String
+public struct PasskeyAssertionResult {
+    public var prfFirst: Data
+    public var prfSecond: Data?
 
     /// Default memberwise initializers are never public by default, so we
     /// declare one manually.
-    public init(indexerUrl: String, proverUrl: String, chainId: UInt64, shieldContract: String, wethContract: String) {
-        self.indexerUrl = indexerUrl
-        self.proverUrl = proverUrl
-        self.chainId = chainId
-        self.shieldContract = shieldContract
-        self.wethContract = wethContract
+    public init(prfFirst: Data, prfSecond: Data?) {
+        self.prfFirst = prfFirst
+        self.prfSecond = prfSecond
     }
 }
 
-extension SdkConfig: Equatable, Hashable {
-    public static func == (lhs: SdkConfig, rhs: SdkConfig) -> Bool {
-        if lhs.indexerUrl != rhs.indexerUrl {
+extension PasskeyAssertionResult: Equatable, Hashable {
+    public static func == (lhs: PasskeyAssertionResult, rhs: PasskeyAssertionResult) -> Bool {
+        if lhs.prfFirst != rhs.prfFirst {
             return false
         }
-        if lhs.proverUrl != rhs.proverUrl {
+        if lhs.prfSecond != rhs.prfSecond {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(prfFirst)
+        hasher.combine(prfSecond)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePasskeyAssertionResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PasskeyAssertionResult {
+        return
+            try PasskeyAssertionResult(
+                prfFirst: FfiConverterData.read(from: &buf),
+                prfSecond: FfiConverterOptionData.read(from: &buf)
+            )
+    }
+
+    public static func write(_ value: PasskeyAssertionResult, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.prfFirst, into: &buf)
+        FfiConverterOptionData.write(value.prfSecond, into: &buf)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypePasskeyAssertionResult_lift(_ buf: RustBuffer) throws -> PasskeyAssertionResult {
+    return try FfiConverterTypePasskeyAssertionResult.lift(buf)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypePasskeyAssertionResult_lower(_ value: PasskeyAssertionResult) -> RustBuffer {
+    return FfiConverterTypePasskeyAssertionResult.lower(value)
+}
+
+public struct PasskeyCredentialResult {
+    public var credentialId: Data
+    public var userHandle: Data
+
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
+    public init(credentialId: Data, userHandle: Data) {
+        self.credentialId = credentialId
+        self.userHandle = userHandle
+    }
+}
+
+extension PasskeyCredentialResult: Equatable, Hashable {
+    public static func == (lhs: PasskeyCredentialResult, rhs: PasskeyCredentialResult) -> Bool {
+        if lhs.credentialId != rhs.credentialId {
+            return false
+        }
+        if lhs.userHandle != rhs.userHandle {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(credentialId)
+        hasher.combine(userHandle)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePasskeyCredentialResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PasskeyCredentialResult {
+        return
+            try PasskeyCredentialResult(
+                credentialId: FfiConverterData.read(from: &buf),
+                userHandle: FfiConverterData.read(from: &buf)
+            )
+    }
+
+    public static func write(_ value: PasskeyCredentialResult, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.credentialId, into: &buf)
+        FfiConverterData.write(value.userHandle, into: &buf)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypePasskeyCredentialResult_lift(_ buf: RustBuffer) throws -> PasskeyCredentialResult {
+    return try FfiConverterTypePasskeyCredentialResult.lift(buf)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypePasskeyCredentialResult_lower(_ value: PasskeyCredentialResult) -> RustBuffer {
+    return FfiConverterTypePasskeyCredentialResult.lower(value)
+}
+
+public struct PrivacyBoostConfig {
+    public var indexerUrl: String
+    public var chainId: UInt64
+    public var shieldContract: String
+    public var wethContract: String?
+    public var teePublicKey: String?
+    public var appId: String
+    public var persistenceStorage: StorageBackend?
+    public var persistenceUnlock: UnlockMethod?
+
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
+    public init(indexerUrl: String, chainId: UInt64, shieldContract: String, wethContract: String?, teePublicKey: String?, appId: String, persistenceStorage: StorageBackend?, persistenceUnlock: UnlockMethod?) {
+        self.indexerUrl = indexerUrl
+        self.chainId = chainId
+        self.shieldContract = shieldContract
+        self.wethContract = wethContract
+        self.teePublicKey = teePublicKey
+        self.appId = appId
+        self.persistenceStorage = persistenceStorage
+        self.persistenceUnlock = persistenceUnlock
+    }
+}
+
+extension PrivacyBoostConfig: Equatable, Hashable {
+    public static func == (lhs: PrivacyBoostConfig, rhs: PrivacyBoostConfig) -> Bool {
+        if lhs.indexerUrl != rhs.indexerUrl {
             return false
         }
         if lhs.chainId != rhs.chainId {
@@ -1583,54 +3511,213 @@ extension SdkConfig: Equatable, Hashable {
         if lhs.wethContract != rhs.wethContract {
             return false
         }
+        if lhs.teePublicKey != rhs.teePublicKey {
+            return false
+        }
+        if lhs.appId != rhs.appId {
+            return false
+        }
+        if lhs.persistenceStorage != rhs.persistenceStorage {
+            return false
+        }
+        if lhs.persistenceUnlock != rhs.persistenceUnlock {
+            return false
+        }
         return true
     }
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(indexerUrl)
-        hasher.combine(proverUrl)
         hasher.combine(chainId)
         hasher.combine(shieldContract)
         hasher.combine(wethContract)
+        hasher.combine(teePublicKey)
+        hasher.combine(appId)
+        hasher.combine(persistenceStorage)
+        hasher.combine(persistenceUnlock)
     }
 }
 
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeSDKConfig: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SdkConfig {
+public struct FfiConverterTypePrivacyBoostConfig: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PrivacyBoostConfig {
         return
-            try SdkConfig(
+            try PrivacyBoostConfig(
                 indexerUrl: FfiConverterString.read(from: &buf),
-                proverUrl: FfiConverterString.read(from: &buf),
                 chainId: FfiConverterUInt64.read(from: &buf),
                 shieldContract: FfiConverterString.read(from: &buf),
-                wethContract: FfiConverterString.read(from: &buf)
+                wethContract: FfiConverterOptionString.read(from: &buf),
+                teePublicKey: FfiConverterOptionString.read(from: &buf),
+                appId: FfiConverterString.read(from: &buf),
+                persistenceStorage: FfiConverterOptionTypeStorageBackend.read(from: &buf),
+                persistenceUnlock: FfiConverterOptionTypeUnlockMethod.read(from: &buf)
             )
     }
 
-    public static func write(_ value: SdkConfig, into buf: inout [UInt8]) {
+    public static func write(_ value: PrivacyBoostConfig, into buf: inout [UInt8]) {
         FfiConverterString.write(value.indexerUrl, into: &buf)
-        FfiConverterString.write(value.proverUrl, into: &buf)
         FfiConverterUInt64.write(value.chainId, into: &buf)
         FfiConverterString.write(value.shieldContract, into: &buf)
-        FfiConverterString.write(value.wethContract, into: &buf)
+        FfiConverterOptionString.write(value.wethContract, into: &buf)
+        FfiConverterOptionString.write(value.teePublicKey, into: &buf)
+        FfiConverterString.write(value.appId, into: &buf)
+        FfiConverterOptionTypeStorageBackend.write(value.persistenceStorage, into: &buf)
+        FfiConverterOptionTypeUnlockMethod.write(value.persistenceUnlock, into: &buf)
     }
 }
 
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeSDKConfig_lift(_ buf: RustBuffer) throws -> SdkConfig {
-    return try FfiConverterTypeSDKConfig.lift(buf)
+public func FfiConverterTypePrivacyBoostConfig_lift(_ buf: RustBuffer) throws -> PrivacyBoostConfig {
+    return try FfiConverterTypePrivacyBoostConfig.lift(buf)
 }
 
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeSDKConfig_lower(_ value: SdkConfig) -> RustBuffer {
-    return FfiConverterTypeSDKConfig.lower(value)
+public func FfiConverterTypePrivacyBoostConfig_lower(_ value: PrivacyBoostConfig) -> RustBuffer {
+    return FfiConverterTypePrivacyBoostConfig.lower(value)
+}
+
+public struct ReceiverTransfer {
+    public var pubKey: String
+    public var amount: String
+
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
+    public init(pubKey: String, amount: String) {
+        self.pubKey = pubKey
+        self.amount = amount
+    }
+}
+
+extension ReceiverTransfer: Equatable, Hashable {
+    public static func == (lhs: ReceiverTransfer, rhs: ReceiverTransfer) -> Bool {
+        if lhs.pubKey != rhs.pubKey {
+            return false
+        }
+        if lhs.amount != rhs.amount {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(pubKey)
+        hasher.combine(amount)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeReceiverTransfer: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ReceiverTransfer {
+        return
+            try ReceiverTransfer(
+                pubKey: FfiConverterString.read(from: &buf),
+                amount: FfiConverterString.read(from: &buf)
+            )
+    }
+
+    public static func write(_ value: ReceiverTransfer, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.pubKey, into: &buf)
+        FfiConverterString.write(value.amount, into: &buf)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeReceiverTransfer_lift(_ buf: RustBuffer) throws -> ReceiverTransfer {
+    return try FfiConverterTypeReceiverTransfer.lift(buf)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeReceiverTransfer_lower(_ value: ReceiverTransfer) -> RustBuffer {
+    return FfiConverterTypeReceiverTransfer.lower(value)
+}
+
+public struct RegisteredToken {
+    public var id: UInt16
+    public var tokenType: UInt8
+    public var tokenAddress: String
+    public var tokenSubId: String
+
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
+    public init(id: UInt16, tokenType: UInt8, tokenAddress: String, tokenSubId: String) {
+        self.id = id
+        self.tokenType = tokenType
+        self.tokenAddress = tokenAddress
+        self.tokenSubId = tokenSubId
+    }
+}
+
+extension RegisteredToken: Equatable, Hashable {
+    public static func == (lhs: RegisteredToken, rhs: RegisteredToken) -> Bool {
+        if lhs.id != rhs.id {
+            return false
+        }
+        if lhs.tokenType != rhs.tokenType {
+            return false
+        }
+        if lhs.tokenAddress != rhs.tokenAddress {
+            return false
+        }
+        if lhs.tokenSubId != rhs.tokenSubId {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(tokenType)
+        hasher.combine(tokenAddress)
+        hasher.combine(tokenSubId)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRegisteredToken: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RegisteredToken {
+        return
+            try RegisteredToken(
+                id: FfiConverterUInt16.read(from: &buf),
+                tokenType: FfiConverterUInt8.read(from: &buf),
+                tokenAddress: FfiConverterString.read(from: &buf),
+                tokenSubId: FfiConverterString.read(from: &buf)
+            )
+    }
+
+    public static func write(_ value: RegisteredToken, into buf: inout [UInt8]) {
+        FfiConverterUInt16.write(value.id, into: &buf)
+        FfiConverterUInt8.write(value.tokenType, into: &buf)
+        FfiConverterString.write(value.tokenAddress, into: &buf)
+        FfiConverterString.write(value.tokenSubId, into: &buf)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRegisteredToken_lift(_ buf: RustBuffer) throws -> RegisteredToken {
+    return try FfiConverterTypeRegisteredToken.lift(buf)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRegisteredToken_lower(_ value: RegisteredToken) -> RustBuffer {
+    return FfiConverterTypeRegisteredToken.lower(value)
 }
 
 public struct TokenBalance {
@@ -1718,6 +3805,67 @@ public func FfiConverterTypeTokenBalance_lower(_ value: TokenBalance) -> RustBuf
     return FfiConverterTypeTokenBalance.lower(value)
 }
 
+public struct TokenResponse {
+    public var token: String
+    public var expiresIn: UInt64
+
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
+    public init(token: String, expiresIn: UInt64) {
+        self.token = token
+        self.expiresIn = expiresIn
+    }
+}
+
+extension TokenResponse: Equatable, Hashable {
+    public static func == (lhs: TokenResponse, rhs: TokenResponse) -> Bool {
+        if lhs.token != rhs.token {
+            return false
+        }
+        if lhs.expiresIn != rhs.expiresIn {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(token)
+        hasher.combine(expiresIn)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTokenResponse: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TokenResponse {
+        return
+            try TokenResponse(
+                token: FfiConverterString.read(from: &buf),
+                expiresIn: FfiConverterUInt64.read(from: &buf)
+            )
+    }
+
+    public static func write(_ value: TokenResponse, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.token, into: &buf)
+        FfiConverterUInt64.write(value.expiresIn, into: &buf)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTokenResponse_lift(_ buf: RustBuffer) throws -> TokenResponse {
+    return try FfiConverterTypeTokenResponse.lift(buf)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTokenResponse_lower(_ value: TokenResponse) -> RustBuffer {
+    return FfiConverterTypeTokenResponse.lower(value)
+}
+
 public struct Transaction {
     public var txHash: String
     public var txType: String
@@ -1726,11 +3874,12 @@ public struct Transaction {
     public var direction: String
     public var senderPubKey: String
     public var receiverPubKeys: [String]
+    public var receivers: [ReceiverTransfer]
     public var createdAt: UInt64
 
     /// Default memberwise initializers are never public by default, so we
     /// declare one manually.
-    public init(txHash: String, txType: String, tokenAddress: String, amount: String, direction: String, senderPubKey: String, receiverPubKeys: [String], createdAt: UInt64) {
+    public init(txHash: String, txType: String, tokenAddress: String, amount: String, direction: String, senderPubKey: String, receiverPubKeys: [String], receivers: [ReceiverTransfer], createdAt: UInt64) {
         self.txHash = txHash
         self.txType = txType
         self.tokenAddress = tokenAddress
@@ -1738,6 +3887,7 @@ public struct Transaction {
         self.direction = direction
         self.senderPubKey = senderPubKey
         self.receiverPubKeys = receiverPubKeys
+        self.receivers = receivers
         self.createdAt = createdAt
     }
 }
@@ -1765,6 +3915,9 @@ extension Transaction: Equatable, Hashable {
         if lhs.receiverPubKeys != rhs.receiverPubKeys {
             return false
         }
+        if lhs.receivers != rhs.receivers {
+            return false
+        }
         if lhs.createdAt != rhs.createdAt {
             return false
         }
@@ -1779,6 +3932,7 @@ extension Transaction: Equatable, Hashable {
         hasher.combine(direction)
         hasher.combine(senderPubKey)
         hasher.combine(receiverPubKeys)
+        hasher.combine(receivers)
         hasher.combine(createdAt)
     }
 }
@@ -1797,6 +3951,7 @@ public struct FfiConverterTypeTransaction: FfiConverterRustBuffer {
                 direction: FfiConverterString.read(from: &buf),
                 senderPubKey: FfiConverterString.read(from: &buf),
                 receiverPubKeys: FfiConverterSequenceString.read(from: &buf),
+                receivers: FfiConverterSequenceTypeReceiverTransfer.read(from: &buf),
                 createdAt: FfiConverterUInt64.read(from: &buf)
             )
     }
@@ -1809,6 +3964,7 @@ public struct FfiConverterTypeTransaction: FfiConverterRustBuffer {
         FfiConverterString.write(value.direction, into: &buf)
         FfiConverterString.write(value.senderPubKey, into: &buf)
         FfiConverterSequenceString.write(value.receiverPubKeys, into: &buf)
+        FfiConverterSequenceTypeReceiverTransfer.write(value.receivers, into: &buf)
         FfiConverterUInt64.write(value.createdAt, into: &buf)
     }
 }
@@ -1949,6 +4105,172 @@ public func FfiConverterTypeWithdrawResult_lower(_ value: WithdrawResult) -> Rus
     return FfiConverterTypeWithdrawResult.lower(value)
 }
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum AuthResult {
+    case authenticated(loginResult: LoginResult)
+    case credentialRequired(challenge: CredentialChallenge)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAuthResult: FfiConverterRustBuffer {
+    typealias SwiftType = AuthResult
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AuthResult {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        case 1: return try .authenticated(loginResult: FfiConverterTypeLoginResult.read(from: &buf))
+
+        case 2: return try .credentialRequired(challenge: FfiConverterTypeCredentialChallenge.read(from: &buf))
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: AuthResult, into buf: inout [UInt8]) {
+        switch value {
+        case let .authenticated(loginResult):
+            writeInt(&buf, Int32(1))
+            FfiConverterTypeLoginResult.write(loginResult, into: &buf)
+
+        case let .credentialRequired(challenge):
+            writeInt(&buf, Int32(2))
+            FfiConverterTypeCredentialChallenge.write(challenge, into: &buf)
+        }
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAuthResult_lift(_ buf: RustBuffer) throws -> AuthResult {
+    return try FfiConverterTypeAuthResult.lift(buf)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAuthResult_lower(_ value: AuthResult) -> RustBuffer {
+    return FfiConverterTypeAuthResult.lower(value)
+}
+
+extension AuthResult: Equatable, Hashable {}
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum CredentialAction {
+    case setup
+    case unlock
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCredentialAction: FfiConverterRustBuffer {
+    typealias SwiftType = CredentialAction
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CredentialAction {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        case 1: return .setup
+
+        case 2: return .unlock
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CredentialAction, into buf: inout [UInt8]) {
+        switch value {
+        case .setup:
+            writeInt(&buf, Int32(1))
+
+        case .unlock:
+            writeInt(&buf, Int32(2))
+        }
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCredentialAction_lift(_ buf: RustBuffer) throws -> CredentialAction {
+    return try FfiConverterTypeCredentialAction.lift(buf)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCredentialAction_lower(_ value: CredentialAction) -> RustBuffer {
+    return FfiConverterTypeCredentialAction.lower(value)
+}
+
+extension CredentialAction: Equatable, Hashable {}
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum KeySource {
+    case walletDerived
+    case mnemonic(phrase: String)
+    case rawSeed(hexSeed: String)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeKeySource: FfiConverterRustBuffer {
+    typealias SwiftType = KeySource
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KeySource {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        case 1: return .walletDerived
+
+        case 2: return try .mnemonic(phrase: FfiConverterString.read(from: &buf))
+
+        case 3: return try .rawSeed(hexSeed: FfiConverterString.read(from: &buf))
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: KeySource, into buf: inout [UInt8]) {
+        switch value {
+        case .walletDerived:
+            writeInt(&buf, Int32(1))
+
+        case let .mnemonic(phrase):
+            writeInt(&buf, Int32(2))
+            FfiConverterString.write(phrase, into: &buf)
+
+        case let .rawSeed(hexSeed):
+            writeInt(&buf, Int32(3))
+            FfiConverterString.write(hexSeed, into: &buf)
+        }
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKeySource_lift(_ buf: RustBuffer) throws -> KeySource {
+    return try FfiConverterTypeKeySource.lift(buf)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKeySource_lower(_ value: KeySource) -> RustBuffer {
+    return FfiConverterTypeKeySource.lower(value)
+}
+
+extension KeySource: Equatable, Hashable {}
+
 public enum SdkError {
     case NotConnected
     case NotAuthenticated
@@ -1960,6 +4282,15 @@ public enum SdkError {
     case InvalidAddress
     case InvalidAmount
     case SerializationError(message: String)
+    case AuthServerError(code: String, message: String)
+    case DepositError(code: String, message: String)
+    case TransferError(code: String, message: String)
+    case NoteError(code: String, message: String)
+    case MerkleError(code: String, message: String)
+    case ApiError(code: String, message: String, retryable: Bool)
+    case RateLimited(retryAfterMs: UInt64)
+    case Forbidden(message: String)
+    case ResourceNotFound(message: String)
     case InternalError(message: String)
 }
 
@@ -1988,7 +4319,41 @@ public struct FfiConverterTypeSDKError: FfiConverterRustBuffer {
         case 10: return try .SerializationError(
                 message: FfiConverterString.read(from: &buf)
             )
-        case 11: return try .InternalError(
+        case 11: return try .AuthServerError(
+                code: FfiConverterString.read(from: &buf),
+                message: FfiConverterString.read(from: &buf)
+            )
+        case 12: return try .DepositError(
+                code: FfiConverterString.read(from: &buf),
+                message: FfiConverterString.read(from: &buf)
+            )
+        case 13: return try .TransferError(
+                code: FfiConverterString.read(from: &buf),
+                message: FfiConverterString.read(from: &buf)
+            )
+        case 14: return try .NoteError(
+                code: FfiConverterString.read(from: &buf),
+                message: FfiConverterString.read(from: &buf)
+            )
+        case 15: return try .MerkleError(
+                code: FfiConverterString.read(from: &buf),
+                message: FfiConverterString.read(from: &buf)
+            )
+        case 16: return try .ApiError(
+                code: FfiConverterString.read(from: &buf),
+                message: FfiConverterString.read(from: &buf),
+                retryable: FfiConverterBool.read(from: &buf)
+            )
+        case 17: return try .RateLimited(
+                retryAfterMs: FfiConverterUInt64.read(from: &buf)
+            )
+        case 18: return try .Forbidden(
+                message: FfiConverterString.read(from: &buf)
+            )
+        case 19: return try .ResourceNotFound(
+                message: FfiConverterString.read(from: &buf)
+            )
+        case 20: return try .InternalError(
                 message: FfiConverterString.read(from: &buf)
             )
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -2030,8 +4395,51 @@ public struct FfiConverterTypeSDKError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(10))
             FfiConverterString.write(message, into: &buf)
 
-        case let .InternalError(message):
+        case let .AuthServerError(code, message):
             writeInt(&buf, Int32(11))
+            FfiConverterString.write(code, into: &buf)
+            FfiConverterString.write(message, into: &buf)
+
+        case let .DepositError(code, message):
+            writeInt(&buf, Int32(12))
+            FfiConverterString.write(code, into: &buf)
+            FfiConverterString.write(message, into: &buf)
+
+        case let .TransferError(code, message):
+            writeInt(&buf, Int32(13))
+            FfiConverterString.write(code, into: &buf)
+            FfiConverterString.write(message, into: &buf)
+
+        case let .NoteError(code, message):
+            writeInt(&buf, Int32(14))
+            FfiConverterString.write(code, into: &buf)
+            FfiConverterString.write(message, into: &buf)
+
+        case let .MerkleError(code, message):
+            writeInt(&buf, Int32(15))
+            FfiConverterString.write(code, into: &buf)
+            FfiConverterString.write(message, into: &buf)
+
+        case let .ApiError(code, message, retryable):
+            writeInt(&buf, Int32(16))
+            FfiConverterString.write(code, into: &buf)
+            FfiConverterString.write(message, into: &buf)
+            FfiConverterBool.write(retryable, into: &buf)
+
+        case let .RateLimited(retryAfterMs):
+            writeInt(&buf, Int32(17))
+            FfiConverterUInt64.write(retryAfterMs, into: &buf)
+
+        case let .Forbidden(message):
+            writeInt(&buf, Int32(18))
+            FfiConverterString.write(message, into: &buf)
+
+        case let .ResourceNotFound(message):
+            writeInt(&buf, Int32(19))
+            FfiConverterString.write(message, into: &buf)
+
+        case let .InternalError(message):
+            writeInt(&buf, Int32(20))
             FfiConverterString.write(message, into: &buf)
         }
     }
@@ -2044,6 +4452,134 @@ extension SdkError: Foundation.LocalizedError {
         String(reflecting: self)
     }
 }
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum StorageBackend {
+    case localStorage
+    case indexedDb
+    case osKeychain
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStorageBackend: FfiConverterRustBuffer {
+    typealias SwiftType = StorageBackend
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StorageBackend {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        case 1: return .localStorage
+
+        case 2: return .indexedDb
+
+        case 3: return .osKeychain
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: StorageBackend, into buf: inout [UInt8]) {
+        switch value {
+        case .localStorage:
+            writeInt(&buf, Int32(1))
+
+        case .indexedDb:
+            writeInt(&buf, Int32(2))
+
+        case .osKeychain:
+            writeInt(&buf, Int32(3))
+        }
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStorageBackend_lift(_ buf: RustBuffer) throws -> StorageBackend {
+    return try FfiConverterTypeStorageBackend.lift(buf)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStorageBackend_lower(_ value: StorageBackend) -> RustBuffer {
+    return FfiConverterTypeStorageBackend.lower(value)
+}
+
+extension StorageBackend: Equatable, Hashable {}
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum UnlockMethod {
+    case none
+    case pin
+    case password
+    case biometric
+    case passkey
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeUnlockMethod: FfiConverterRustBuffer {
+    typealias SwiftType = UnlockMethod
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UnlockMethod {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        case 1: return .none
+
+        case 2: return .pin
+
+        case 3: return .password
+
+        case 4: return .biometric
+
+        case 5: return .passkey
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: UnlockMethod, into buf: inout [UInt8]) {
+        switch value {
+        case .none:
+            writeInt(&buf, Int32(1))
+
+        case .pin:
+            writeInt(&buf, Int32(2))
+
+        case .password:
+            writeInt(&buf, Int32(3))
+
+        case .biometric:
+            writeInt(&buf, Int32(4))
+
+        case .passkey:
+            writeInt(&buf, Int32(5))
+        }
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUnlockMethod_lift(_ buf: RustBuffer) throws -> UnlockMethod {
+    return try FfiConverterTypeUnlockMethod.lift(buf)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUnlockMethod_lower(_ value: UnlockMethod) -> RustBuffer {
+    return FfiConverterTypeUnlockMethod.lower(value)
+}
+
+extension UnlockMethod: Equatable, Hashable {}
 
 #if swift(>=5.8)
     @_documentation(visibility: private)
@@ -2096,6 +4632,54 @@ private struct FfiConverterOptionString: FfiConverterRustBuffer {
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
+private struct FfiConverterOptionData: FfiConverterRustBuffer {
+    typealias SwiftType = Data?
+
+    static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterData.write(value, into: &buf)
+    }
+
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterData.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+private struct FfiConverterOptionTypeTokenProvider: FfiConverterRustBuffer {
+    typealias SwiftType = TokenProvider?
+
+    static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeTokenProvider.write(value, into: &buf)
+    }
+
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeTokenProvider.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
 private struct FfiConverterOptionTypeExportedSession: FfiConverterRustBuffer {
     typealias SwiftType = ExportedSession?
 
@@ -2112,6 +4696,78 @@ private struct FfiConverterOptionTypeExportedSession: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeExportedSession.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+private struct FfiConverterOptionTypeKeySource: FfiConverterRustBuffer {
+    typealias SwiftType = KeySource?
+
+    static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeKeySource.write(value, into: &buf)
+    }
+
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeKeySource.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+private struct FfiConverterOptionTypeStorageBackend: FfiConverterRustBuffer {
+    typealias SwiftType = StorageBackend?
+
+    static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeStorageBackend.write(value, into: &buf)
+    }
+
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeStorageBackend.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+private struct FfiConverterOptionTypeUnlockMethod: FfiConverterRustBuffer {
+    typealias SwiftType = UnlockMethod?
+
+    static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeUnlockMethod.write(value, into: &buf)
+    }
+
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeUnlockMethod.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -2137,6 +4793,56 @@ private struct FfiConverterSequenceString: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             try seq.append(FfiConverterString.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+private struct FfiConverterSequenceTypeReceiverTransfer: FfiConverterRustBuffer {
+    typealias SwiftType = [ReceiverTransfer]
+
+    static func write(_ value: [ReceiverTransfer], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeReceiverTransfer.write(item, into: &buf)
+        }
+    }
+
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ReceiverTransfer] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ReceiverTransfer]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            try seq.append(FfiConverterTypeReceiverTransfer.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+private struct FfiConverterSequenceTypeRegisteredToken: FfiConverterRustBuffer {
+    typealias SwiftType = [RegisteredToken]
+
+    static func write(_ value: [RegisteredToken], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeRegisteredToken.write(item, into: &buf)
+        }
+    }
+
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [RegisteredToken] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [RegisteredToken]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            try seq.append(FfiConverterTypeRegisteredToken.read(from: &buf))
         }
         return seq
     }
@@ -2192,6 +4898,125 @@ private struct FfiConverterSequenceTypeTransaction: FfiConverterRustBuffer {
     }
 }
 
+private let UNIFFI_RUST_FUTURE_POLL_READY: Int8 = 0
+private let UNIFFI_RUST_FUTURE_POLL_MAYBE_READY: Int8 = 1
+
+private let uniffiContinuationHandleMap = UniffiHandleMap<UnsafeContinuation<Int8, Never>>()
+
+private func uniffiRustCallAsync<F, T>(
+    rustFutureFunc: () -> UInt64,
+    pollFunc: (UInt64, @escaping UniffiRustFutureContinuationCallback, UInt64) -> Void,
+    completeFunc: (UInt64, UnsafeMutablePointer<RustCallStatus>) -> F,
+    freeFunc: (UInt64) -> Void,
+    liftFunc: (F) throws -> T,
+    errorHandler: ((RustBuffer) throws -> Swift.Error)?
+) async throws -> T {
+    // Make sure to call uniffiEnsureInitialized() since future creation doesn't have a
+    // RustCallStatus param, so doesn't use makeRustCall()
+    uniffiEnsureInitialized()
+    let rustFuture = rustFutureFunc()
+    defer {
+        freeFunc(rustFuture)
+    }
+    var pollResult: Int8
+    repeat {
+        pollResult = await withUnsafeContinuation {
+            pollFunc(
+                rustFuture,
+                uniffiFutureContinuationCallback,
+                uniffiContinuationHandleMap.insert(obj: $0)
+            )
+        }
+    } while pollResult != UNIFFI_RUST_FUTURE_POLL_READY
+
+    return try liftFunc(makeRustCall(
+        { completeFunc(rustFuture, $0) },
+        errorHandler: errorHandler
+    ))
+}
+
+/// Callback handlers for an async calls.  These are invoked by Rust when the future is ready.  They
+/// lift the return value or error and resume the suspended function.
+private func uniffiFutureContinuationCallback(handle: UInt64, pollResult: Int8) {
+    if let continuation = try? uniffiContinuationHandleMap.remove(handle: handle) {
+        continuation.resume(returning: pollResult)
+    } else {
+        print("uniffiFutureContinuationCallback invalid handle")
+    }
+}
+
+private func uniffiTraitInterfaceCallAsync<T>(
+    makeCall: @escaping () async throws -> T,
+    handleSuccess: @escaping (T) -> Void,
+    handleError: @escaping (Int8, RustBuffer) -> Void
+) -> UniffiForeignFuture {
+    let task = Task {
+        do {
+            try handleSuccess(await makeCall())
+        } catch {
+            handleError(CALL_UNEXPECTED_ERROR, FfiConverterString.lower(String(describing: error)))
+        }
+    }
+    let handle = UNIFFI_FOREIGN_FUTURE_HANDLE_MAP.insert(obj: task)
+    return UniffiForeignFuture(handle: handle, free: uniffiForeignFutureFree)
+}
+
+private func uniffiTraitInterfaceCallAsyncWithError<T, E>(
+    makeCall: @escaping () async throws -> T,
+    handleSuccess: @escaping (T) -> Void,
+    handleError: @escaping (Int8, RustBuffer) -> Void,
+    lowerError: @escaping (E) -> RustBuffer
+) -> UniffiForeignFuture {
+    let task = Task {
+        do {
+            try handleSuccess(await makeCall())
+        } catch let error as E {
+            handleError(CALL_ERROR, lowerError(error))
+        } catch {
+            handleError(CALL_UNEXPECTED_ERROR, FfiConverterString.lower(String(describing: error)))
+        }
+    }
+    let handle = UNIFFI_FOREIGN_FUTURE_HANDLE_MAP.insert(obj: task)
+    return UniffiForeignFuture(handle: handle, free: uniffiForeignFutureFree)
+}
+
+// Borrow the callback handle map implementation to store foreign future handles
+// TODO: consolidate the handle-map code (https://github.com/mozilla/uniffi-rs/pull/1823)
+private var UNIFFI_FOREIGN_FUTURE_HANDLE_MAP = UniffiHandleMap<UniffiForeignFutureTask>()
+
+/// Protocol for tasks that handle foreign futures.
+///
+/// Defining a protocol allows all tasks to be stored in the same handle map.  This can't be done
+/// with the task object itself, since has generic parameters.
+protocol UniffiForeignFutureTask {
+    func cancel()
+}
+
+extension Task: UniffiForeignFutureTask {}
+
+private func uniffiForeignFutureFree(handle: UInt64) {
+    do {
+        let task = try UNIFFI_FOREIGN_FUTURE_HANDLE_MAP.remove(handle: handle)
+        // Set the cancellation flag on the task.  If it's still running, the code can check the
+        // cancellation flag or call `Task.checkCancellation()`.  If the task has completed, this is
+        // a no-op.
+        task.cancel()
+    } catch {
+        print("uniffiForeignFutureFree: handle missing from handlemap")
+    }
+}
+
+/// For testing
+public func uniffiForeignFutureHandleCountPrivacyBoost() -> Int {
+    UNIFFI_FOREIGN_FUTURE_HANDLE_MAP.count
+}
+
+public func generateMnemonic() throws -> String {
+    return try FfiConverterString.lift(rustCallWithError(FfiConverterTypeSDKError.lift) {
+        uniffi_privacy_boost_ios_fn_func_generate_mnemonic($0)
+    })
+}
+
 public func sdkVersion() -> String {
     return try! FfiConverterString.lift(try! rustCall {
         uniffi_privacy_boost_ios_fn_func_sdk_version($0)
@@ -2214,94 +5039,161 @@ private var initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
+    if uniffi_privacy_boost_ios_checksum_func_generate_mnemonic() != 5954 {
+        return InitializationResult.apiChecksumMismatch
+    }
     if uniffi_privacy_boost_ios_checksum_func_sdk_version() != 63303 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_connect() != 40135 {
+    if uniffi_privacy_boost_ios_checksum_method_biometricdelegate_authenticate() != 22614 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_deposit() != 18014 {
+    if uniffi_privacy_boost_ios_checksum_method_biometricdelegate_delete_secret() != 27149 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_disconnect() != 35571 {
+    if uniffi_privacy_boost_ios_checksum_method_biometricdelegate_get_capabilities() != 41705 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_export_session() != 12717 {
+    if uniffi_privacy_boost_ios_checksum_method_biometricdelegate_retrieve_secret() != 47755 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_format_amount() != 52731 {
+    if uniffi_privacy_boost_ios_checksum_method_biometricdelegate_store_secret() != 39895 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_get_all_balances() != 17377 {
+    if uniffi_privacy_boost_ios_checksum_method_keychaindelegate_contains() != 37723 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_get_balance() != 53409 {
+    if uniffi_privacy_boost_ios_checksum_method_keychaindelegate_delete() != 26856 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_get_mpk() != 44475 {
+    if uniffi_privacy_boost_ios_checksum_method_keychaindelegate_is_available() != 43930 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_get_privacy_address() != 1958 {
+    if uniffi_privacy_boost_ios_checksum_method_keychaindelegate_load() != 45230 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_get_transaction_history() != 12141 {
+    if uniffi_privacy_boost_ios_checksum_method_keychaindelegate_store() != 55405 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_get_wallet_address() != 16307 {
+    if uniffi_privacy_boost_ios_checksum_method_keychaindelegate_supports_biometry() != 41837 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_import_session() != 20574 {
+    if uniffi_privacy_boost_ios_checksum_method_passkeydelegate_create_credential() != 27278 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_is_authenticated() != 33094 {
+    if uniffi_privacy_boost_ios_checksum_method_passkeydelegate_get_assertion() != 44060 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_is_connected() != 21448 {
+    if uniffi_privacy_boost_ios_checksum_method_passkeydelegate_is_available() != 38966 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_is_valid_address() != 900 {
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_authenticate() != 34084 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_is_valid_privacy_address() != 15922 {
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_clear_session() != 56950 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_login() != 24921 {
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_deposit() != 9494 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_logout() != 58926 {
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_export_session() != 31657 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_parse_amount() != 56449 {
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_format_amount() != 9158 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_search_address() != 60272 {
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_get_all_balances() != 34486 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_send() != 53003 {
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_get_balance() != 20248 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_privacyboostsdk_withdraw() != 55684 {
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_get_fees() != 21839 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_walletdelegate_get_address() != 45375 {
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_get_mpk() != 3049 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_walletdelegate_get_chain_id() != 55319 {
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_get_privacy_address() != 33121 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_walletdelegate_send_transaction() != 7151 {
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_get_registered_tokens() != 26746 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_walletdelegate_sign_message() != 3797 {
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_get_transaction_history() != 37968 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_method_walletdelegate_sign_typed_data() != 22795 {
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_get_wallet_address() != 56394 {
         return InitializationResult.apiChecksumMismatch
     }
-    if uniffi_privacy_boost_ios_checksum_constructor_privacyboostsdk_new() != 43327 {
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_import_session() != 21031 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_is_authenticated() != 19439 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_is_connected() != 28610 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_is_valid_address() != 14095 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_is_valid_privacy_address() != 25149 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_logout() != 13721 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_parse_amount() != 21842 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_search_address() != 12 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_send() != 27050 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_set_biometric_delegate() != 50923 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_set_keychain_delegate() != 51318 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_set_passkey_delegate() != 38199 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_submit_credential() != 62199 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_withdraw() != 19650 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_tokenprovider_get_token() != 11730 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_walletdelegate_get_address() != 6236 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_walletdelegate_get_chain_id() != 11265 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_walletdelegate_send_transaction() != 10197 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_walletdelegate_sign_message() != 53457 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_walletdelegate_sign_typed_data() != 41169 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_constructor_privacyboost_new() != 50540 {
         return InitializationResult.apiChecksumMismatch
     }
 
+    uniffiCallbackInitBiometricDelegate()
+    uniffiCallbackInitKeychainDelegate()
+    uniffiCallbackInitPasskeyDelegate()
+    uniffiCallbackInitTokenProvider()
     uniffiCallbackInitWalletDelegate()
     return InitializationResult.ok
 }()
