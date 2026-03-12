@@ -462,6 +462,22 @@ private struct FfiConverterUInt64: FfiConverterPrimitive {
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
+private struct FfiConverterDouble: FfiConverterPrimitive {
+    typealias FfiType = Double
+    typealias SwiftType = Double
+
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Double {
+        return try lift(readDouble(&buf))
+    }
+
+    static func write(_ value: Double, into buf: inout [UInt8]) {
+        writeDouble(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
 private struct FfiConverterBool: FfiConverter {
     typealias FfiType = Int8
     typealias SwiftType = Bool
@@ -1703,6 +1719,8 @@ public protocol PrivacyBoostProtocol: AnyObject {
 
     func getBalance(tokenAddress: String) async throws -> TokenBalance
 
+    func getDepositStatus(requestId: String) async throws -> DepositStatus
+
     func getFees() async throws -> FeeRates
 
     func getMpk() -> String?
@@ -1713,7 +1731,11 @@ public protocol PrivacyBoostProtocol: AnyObject {
 
     func getTransactionHistory(txType: String?, tokenAddress: String?, limit: UInt32?) async throws -> [Transaction]
 
+    func getTransferStatus(id: String) async throws -> TransactionStatus
+
     func getWalletAddress() -> String?
+
+    func getWithdrawalStatus(id: String) async throws -> TransactionStatus
 
     func importSession(session: ExportedSession) throws -> Bool
 
@@ -1888,6 +1910,23 @@ open class PrivacyBoost:
             )
     }
 
+    open func getDepositStatus(requestId: String) async throws -> DepositStatus {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_privacyboost_get_deposit_status(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(requestId)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterTypeDepositStatus.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+
     open func getFees() async throws -> FeeRates {
         return
             try await uniffiRustCallAsync(
@@ -1939,10 +1978,44 @@ open class PrivacyBoost:
             )
     }
 
+    open func getTransferStatus(id: String) async throws -> TransactionStatus {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_privacyboost_get_transfer_status(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(id)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterTypeTransactionStatus.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+
     open func getWalletAddress() -> String? {
         return try! FfiConverterOptionString.lift(try! rustCall {
             uniffi_privacy_boost_ios_fn_method_privacyboost_get_wallet_address(self.uniffiClonePointer(), $0)
         })
+    }
+
+    open func getWithdrawalStatus(id: String) async throws -> TransactionStatus {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_privacyboost_get_withdrawal_status(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(id)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterTypeTransactionStatus.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
     }
 
     open func importSession(session: ExportedSession) throws -> Bool {
@@ -2323,6 +2396,8 @@ public protocol WalletDelegate: AnyObject {
     func signMessage(message: String) async throws -> String
 
     func signTypedData(typedDataJson: String) async throws -> String
+
+    func waitForTransactionReceipt(txHash: String) async throws -> TransactionReceipt
 }
 
 open class WalletDelegateImpl:
@@ -2453,6 +2528,23 @@ open class WalletDelegateImpl:
                 completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
                 freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
                 liftFunc: FfiConverterString.lift,
+                errorHandler: FfiConverterTypeSDKError.lift
+            )
+    }
+
+    open func waitForTransactionReceipt(txHash: String) async throws -> TransactionReceipt {
+        return
+            try await uniffiRustCallAsync(
+                rustFutureFunc: {
+                    uniffi_privacy_boost_ios_fn_method_walletdelegate_wait_for_transaction_receipt(
+                        self.uniffiClonePointer(),
+                        FfiConverterString.lower(txHash)
+                    )
+                },
+                pollFunc: ffi_privacy_boost_ios_rust_future_poll_rust_buffer,
+                completeFunc: ffi_privacy_boost_ios_rust_future_complete_rust_buffer,
+                freeFunc: ffi_privacy_boost_ios_rust_future_free_rust_buffer,
+                liftFunc: FfiConverterTypeTransactionReceipt.lift,
                 errorHandler: FfiConverterTypeSDKError.lift
             )
     }
@@ -2657,6 +2749,49 @@ private enum UniffiCallbackInterfaceWalletDelegate {
                     uniffiCallbackData,
                     UniffiForeignFutureStructRustBuffer(
                         returnValue: FfiConverterString.lower(returnValue),
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { statusCode, errorBuf in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: RustBuffer.empty(),
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            let uniffiForeignFuture = uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeSDKError.lower
+            )
+            uniffiOutReturn.pointee = uniffiForeignFuture
+        },
+        waitForTransactionReceipt: { (
+            uniffiHandle: UInt64,
+            txHash: RustBuffer,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteRustBuffer,
+            uniffiCallbackData: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<UniffiForeignFuture>
+        ) in
+            let makeCall = {
+                () async throws -> TransactionReceipt in
+                guard let uniffiObj = try? FfiConverterTypeWalletDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.waitForTransactionReceipt(
+                    txHash: FfiConverterString.lift(txHash)
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: TransactionReceipt) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureStructRustBuffer(
+                        returnValue: FfiConverterTypeTransactionReceipt.lower(returnValue),
                         callStatus: RustCallStatus()
                     )
                 )
@@ -2938,13 +3073,15 @@ public struct DepositResult {
     public var txHash: String
     public var commitment: String
     public var warning: String?
+    public var requestId: String
 
     /// Default memberwise initializers are never public by default, so we
     /// declare one manually.
-    public init(txHash: String, commitment: String, warning: String?) {
+    public init(txHash: String, commitment: String, warning: String?, requestId: String) {
         self.txHash = txHash
         self.commitment = commitment
         self.warning = warning
+        self.requestId = requestId
     }
 }
 
@@ -2959,6 +3096,9 @@ extension DepositResult: Equatable, Hashable {
         if lhs.warning != rhs.warning {
             return false
         }
+        if lhs.requestId != rhs.requestId {
+            return false
+        }
         return true
     }
 
@@ -2966,6 +3106,7 @@ extension DepositResult: Equatable, Hashable {
         hasher.combine(txHash)
         hasher.combine(commitment)
         hasher.combine(warning)
+        hasher.combine(requestId)
     }
 }
 
@@ -2978,7 +3119,8 @@ public struct FfiConverterTypeDepositResult: FfiConverterRustBuffer {
             try DepositResult(
                 txHash: FfiConverterString.read(from: &buf),
                 commitment: FfiConverterString.read(from: &buf),
-                warning: FfiConverterOptionString.read(from: &buf)
+                warning: FfiConverterOptionString.read(from: &buf),
+                requestId: FfiConverterString.read(from: &buf)
             )
     }
 
@@ -2986,6 +3128,7 @@ public struct FfiConverterTypeDepositResult: FfiConverterRustBuffer {
         FfiConverterString.write(value.txHash, into: &buf)
         FfiConverterString.write(value.commitment, into: &buf)
         FfiConverterOptionString.write(value.warning, into: &buf)
+        FfiConverterString.write(value.requestId, into: &buf)
     }
 }
 
@@ -3001,6 +3144,107 @@ public func FfiConverterTypeDepositResult_lift(_ buf: RustBuffer) throws -> Depo
 #endif
 public func FfiConverterTypeDepositResult_lower(_ value: DepositResult) -> RustBuffer {
     return FfiConverterTypeDepositResult.lower(value)
+}
+
+public struct DepositStatus {
+    public var id: String
+    public var status: String
+    public var createdAt: String?
+    public var updatedAt: String?
+    public var txHash: String?
+    public var leafIndex: UInt64?
+    public var error: String?
+
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
+    public init(id: String, status: String, createdAt: String?, updatedAt: String?, txHash: String?, leafIndex: UInt64?, error: String?) {
+        self.id = id
+        self.status = status
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.txHash = txHash
+        self.leafIndex = leafIndex
+        self.error = error
+    }
+}
+
+extension DepositStatus: Equatable, Hashable {
+    public static func == (lhs: DepositStatus, rhs: DepositStatus) -> Bool {
+        if lhs.id != rhs.id {
+            return false
+        }
+        if lhs.status != rhs.status {
+            return false
+        }
+        if lhs.createdAt != rhs.createdAt {
+            return false
+        }
+        if lhs.updatedAt != rhs.updatedAt {
+            return false
+        }
+        if lhs.txHash != rhs.txHash {
+            return false
+        }
+        if lhs.leafIndex != rhs.leafIndex {
+            return false
+        }
+        if lhs.error != rhs.error {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(status)
+        hasher.combine(createdAt)
+        hasher.combine(updatedAt)
+        hasher.combine(txHash)
+        hasher.combine(leafIndex)
+        hasher.combine(error)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDepositStatus: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DepositStatus {
+        return
+            try DepositStatus(
+                id: FfiConverterString.read(from: &buf),
+                status: FfiConverterString.read(from: &buf),
+                createdAt: FfiConverterOptionString.read(from: &buf),
+                updatedAt: FfiConverterOptionString.read(from: &buf),
+                txHash: FfiConverterOptionString.read(from: &buf),
+                leafIndex: FfiConverterOptionUInt64.read(from: &buf),
+                error: FfiConverterOptionString.read(from: &buf)
+            )
+    }
+
+    public static func write(_ value: DepositStatus, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.status, into: &buf)
+        FfiConverterOptionString.write(value.createdAt, into: &buf)
+        FfiConverterOptionString.write(value.updatedAt, into: &buf)
+        FfiConverterOptionString.write(value.txHash, into: &buf)
+        FfiConverterOptionUInt64.write(value.leafIndex, into: &buf)
+        FfiConverterOptionString.write(value.error, into: &buf)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDepositStatus_lift(_ buf: RustBuffer) throws -> DepositStatus {
+    return try FfiConverterTypeDepositStatus.lift(buf)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDepositStatus_lower(_ value: DepositStatus) -> RustBuffer {
+    return FfiConverterTypeDepositStatus.lower(value)
 }
 
 public struct ExportedSession {
@@ -3648,14 +3892,20 @@ public struct RegisteredToken {
     public var tokenType: UInt8
     public var tokenAddress: String
     public var tokenSubId: String
+    public var priceUsd: Double?
+    public var decimals: UInt8?
+    public var minDepositAmount: String?
 
     /// Default memberwise initializers are never public by default, so we
     /// declare one manually.
-    public init(id: UInt16, tokenType: UInt8, tokenAddress: String, tokenSubId: String) {
+    public init(id: UInt16, tokenType: UInt8, tokenAddress: String, tokenSubId: String, priceUsd: Double?, decimals: UInt8?, minDepositAmount: String?) {
         self.id = id
         self.tokenType = tokenType
         self.tokenAddress = tokenAddress
         self.tokenSubId = tokenSubId
+        self.priceUsd = priceUsd
+        self.decimals = decimals
+        self.minDepositAmount = minDepositAmount
     }
 }
 
@@ -3673,6 +3923,15 @@ extension RegisteredToken: Equatable, Hashable {
         if lhs.tokenSubId != rhs.tokenSubId {
             return false
         }
+        if lhs.priceUsd != rhs.priceUsd {
+            return false
+        }
+        if lhs.decimals != rhs.decimals {
+            return false
+        }
+        if lhs.minDepositAmount != rhs.minDepositAmount {
+            return false
+        }
         return true
     }
 
@@ -3681,6 +3940,9 @@ extension RegisteredToken: Equatable, Hashable {
         hasher.combine(tokenType)
         hasher.combine(tokenAddress)
         hasher.combine(tokenSubId)
+        hasher.combine(priceUsd)
+        hasher.combine(decimals)
+        hasher.combine(minDepositAmount)
     }
 }
 
@@ -3694,7 +3956,10 @@ public struct FfiConverterTypeRegisteredToken: FfiConverterRustBuffer {
                 id: FfiConverterUInt16.read(from: &buf),
                 tokenType: FfiConverterUInt8.read(from: &buf),
                 tokenAddress: FfiConverterString.read(from: &buf),
-                tokenSubId: FfiConverterString.read(from: &buf)
+                tokenSubId: FfiConverterString.read(from: &buf),
+                priceUsd: FfiConverterOptionDouble.read(from: &buf),
+                decimals: FfiConverterOptionUInt8.read(from: &buf),
+                minDepositAmount: FfiConverterOptionString.read(from: &buf)
             )
     }
 
@@ -3703,6 +3968,9 @@ public struct FfiConverterTypeRegisteredToken: FfiConverterRustBuffer {
         FfiConverterUInt8.write(value.tokenType, into: &buf)
         FfiConverterString.write(value.tokenAddress, into: &buf)
         FfiConverterString.write(value.tokenSubId, into: &buf)
+        FfiConverterOptionDouble.write(value.priceUsd, into: &buf)
+        FfiConverterOptionUInt8.write(value.decimals, into: &buf)
+        FfiConverterOptionString.write(value.minDepositAmount, into: &buf)
     }
 }
 
@@ -3869,6 +4137,7 @@ public func FfiConverterTypeTokenResponse_lower(_ value: TokenResponse) -> RustB
 public struct Transaction {
     public var txHash: String
     public var txType: String
+    public var status: String
     public var tokenAddress: String
     public var amount: String
     public var direction: String
@@ -3876,12 +4145,15 @@ public struct Transaction {
     public var receiverPubKeys: [String]
     public var receivers: [ReceiverTransfer]
     public var createdAt: UInt64
+    public var updatedAt: UInt64
+    public var error: String?
 
     /// Default memberwise initializers are never public by default, so we
     /// declare one manually.
-    public init(txHash: String, txType: String, tokenAddress: String, amount: String, direction: String, senderPubKey: String, receiverPubKeys: [String], receivers: [ReceiverTransfer], createdAt: UInt64) {
+    public init(txHash: String, txType: String, status: String, tokenAddress: String, amount: String, direction: String, senderPubKey: String, receiverPubKeys: [String], receivers: [ReceiverTransfer], createdAt: UInt64, updatedAt: UInt64, error: String?) {
         self.txHash = txHash
         self.txType = txType
+        self.status = status
         self.tokenAddress = tokenAddress
         self.amount = amount
         self.direction = direction
@@ -3889,6 +4161,8 @@ public struct Transaction {
         self.receiverPubKeys = receiverPubKeys
         self.receivers = receivers
         self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.error = error
     }
 }
 
@@ -3898,6 +4172,9 @@ extension Transaction: Equatable, Hashable {
             return false
         }
         if lhs.txType != rhs.txType {
+            return false
+        }
+        if lhs.status != rhs.status {
             return false
         }
         if lhs.tokenAddress != rhs.tokenAddress {
@@ -3921,12 +4198,19 @@ extension Transaction: Equatable, Hashable {
         if lhs.createdAt != rhs.createdAt {
             return false
         }
+        if lhs.updatedAt != rhs.updatedAt {
+            return false
+        }
+        if lhs.error != rhs.error {
+            return false
+        }
         return true
     }
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(txHash)
         hasher.combine(txType)
+        hasher.combine(status)
         hasher.combine(tokenAddress)
         hasher.combine(amount)
         hasher.combine(direction)
@@ -3934,6 +4218,8 @@ extension Transaction: Equatable, Hashable {
         hasher.combine(receiverPubKeys)
         hasher.combine(receivers)
         hasher.combine(createdAt)
+        hasher.combine(updatedAt)
+        hasher.combine(error)
     }
 }
 
@@ -3946,19 +4232,23 @@ public struct FfiConverterTypeTransaction: FfiConverterRustBuffer {
             try Transaction(
                 txHash: FfiConverterString.read(from: &buf),
                 txType: FfiConverterString.read(from: &buf),
+                status: FfiConverterString.read(from: &buf),
                 tokenAddress: FfiConverterString.read(from: &buf),
                 amount: FfiConverterString.read(from: &buf),
                 direction: FfiConverterString.read(from: &buf),
                 senderPubKey: FfiConverterString.read(from: &buf),
                 receiverPubKeys: FfiConverterSequenceString.read(from: &buf),
                 receivers: FfiConverterSequenceTypeReceiverTransfer.read(from: &buf),
-                createdAt: FfiConverterUInt64.read(from: &buf)
+                createdAt: FfiConverterUInt64.read(from: &buf),
+                updatedAt: FfiConverterUInt64.read(from: &buf),
+                error: FfiConverterOptionString.read(from: &buf)
             )
     }
 
     public static func write(_ value: Transaction, into buf: inout [UInt8]) {
         FfiConverterString.write(value.txHash, into: &buf)
         FfiConverterString.write(value.txType, into: &buf)
+        FfiConverterString.write(value.status, into: &buf)
         FfiConverterString.write(value.tokenAddress, into: &buf)
         FfiConverterString.write(value.amount, into: &buf)
         FfiConverterString.write(value.direction, into: &buf)
@@ -3966,6 +4256,8 @@ public struct FfiConverterTypeTransaction: FfiConverterRustBuffer {
         FfiConverterSequenceString.write(value.receiverPubKeys, into: &buf)
         FfiConverterSequenceTypeReceiverTransfer.write(value.receivers, into: &buf)
         FfiConverterUInt64.write(value.createdAt, into: &buf)
+        FfiConverterUInt64.write(value.updatedAt, into: &buf)
+        FfiConverterOptionString.write(value.error, into: &buf)
     }
 }
 
@@ -3983,13 +4275,254 @@ public func FfiConverterTypeTransaction_lower(_ value: Transaction) -> RustBuffe
     return FfiConverterTypeTransaction.lower(value)
 }
 
+public struct TransactionLog {
+    public var address: String
+    public var topics: [String]
+    public var data: String
+
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
+    public init(address: String, topics: [String], data: String) {
+        self.address = address
+        self.topics = topics
+        self.data = data
+    }
+}
+
+extension TransactionLog: Equatable, Hashable {
+    public static func == (lhs: TransactionLog, rhs: TransactionLog) -> Bool {
+        if lhs.address != rhs.address {
+            return false
+        }
+        if lhs.topics != rhs.topics {
+            return false
+        }
+        if lhs.data != rhs.data {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(address)
+        hasher.combine(topics)
+        hasher.combine(data)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTransactionLog: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TransactionLog {
+        return
+            try TransactionLog(
+                address: FfiConverterString.read(from: &buf),
+                topics: FfiConverterSequenceString.read(from: &buf),
+                data: FfiConverterString.read(from: &buf)
+            )
+    }
+
+    public static func write(_ value: TransactionLog, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.address, into: &buf)
+        FfiConverterSequenceString.write(value.topics, into: &buf)
+        FfiConverterString.write(value.data, into: &buf)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTransactionLog_lift(_ buf: RustBuffer) throws -> TransactionLog {
+    return try FfiConverterTypeTransactionLog.lift(buf)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTransactionLog_lower(_ value: TransactionLog) -> RustBuffer {
+    return FfiConverterTypeTransactionLog.lower(value)
+}
+
+public struct TransactionReceipt {
+    public var txHash: String
+    public var status: Bool
+    public var logs: [TransactionLog]
+
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
+    public init(txHash: String, status: Bool, logs: [TransactionLog]) {
+        self.txHash = txHash
+        self.status = status
+        self.logs = logs
+    }
+}
+
+extension TransactionReceipt: Equatable, Hashable {
+    public static func == (lhs: TransactionReceipt, rhs: TransactionReceipt) -> Bool {
+        if lhs.txHash != rhs.txHash {
+            return false
+        }
+        if lhs.status != rhs.status {
+            return false
+        }
+        if lhs.logs != rhs.logs {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(txHash)
+        hasher.combine(status)
+        hasher.combine(logs)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTransactionReceipt: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TransactionReceipt {
+        return
+            try TransactionReceipt(
+                txHash: FfiConverterString.read(from: &buf),
+                status: FfiConverterBool.read(from: &buf),
+                logs: FfiConverterSequenceTypeTransactionLog.read(from: &buf)
+            )
+    }
+
+    public static func write(_ value: TransactionReceipt, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.txHash, into: &buf)
+        FfiConverterBool.write(value.status, into: &buf)
+        FfiConverterSequenceTypeTransactionLog.write(value.logs, into: &buf)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTransactionReceipt_lift(_ buf: RustBuffer) throws -> TransactionReceipt {
+    return try FfiConverterTypeTransactionReceipt.lift(buf)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTransactionReceipt_lower(_ value: TransactionReceipt) -> RustBuffer {
+    return FfiConverterTypeTransactionReceipt.lower(value)
+}
+
+public struct TransactionStatus {
+    public var id: String
+    public var txType: String
+    public var status: String
+    public var createdAt: String?
+    public var updatedAt: String?
+    public var txHash: String?
+    public var error: String?
+
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
+    public init(id: String, txType: String, status: String, createdAt: String?, updatedAt: String?, txHash: String?, error: String?) {
+        self.id = id
+        self.txType = txType
+        self.status = status
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.txHash = txHash
+        self.error = error
+    }
+}
+
+extension TransactionStatus: Equatable, Hashable {
+    public static func == (lhs: TransactionStatus, rhs: TransactionStatus) -> Bool {
+        if lhs.id != rhs.id {
+            return false
+        }
+        if lhs.txType != rhs.txType {
+            return false
+        }
+        if lhs.status != rhs.status {
+            return false
+        }
+        if lhs.createdAt != rhs.createdAt {
+            return false
+        }
+        if lhs.updatedAt != rhs.updatedAt {
+            return false
+        }
+        if lhs.txHash != rhs.txHash {
+            return false
+        }
+        if lhs.error != rhs.error {
+            return false
+        }
+        return true
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(txType)
+        hasher.combine(status)
+        hasher.combine(createdAt)
+        hasher.combine(updatedAt)
+        hasher.combine(txHash)
+        hasher.combine(error)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTransactionStatus: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TransactionStatus {
+        return
+            try TransactionStatus(
+                id: FfiConverterString.read(from: &buf),
+                txType: FfiConverterString.read(from: &buf),
+                status: FfiConverterString.read(from: &buf),
+                createdAt: FfiConverterOptionString.read(from: &buf),
+                updatedAt: FfiConverterOptionString.read(from: &buf),
+                txHash: FfiConverterOptionString.read(from: &buf),
+                error: FfiConverterOptionString.read(from: &buf)
+            )
+    }
+
+    public static func write(_ value: TransactionStatus, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.txType, into: &buf)
+        FfiConverterString.write(value.status, into: &buf)
+        FfiConverterOptionString.write(value.createdAt, into: &buf)
+        FfiConverterOptionString.write(value.updatedAt, into: &buf)
+        FfiConverterOptionString.write(value.txHash, into: &buf)
+        FfiConverterOptionString.write(value.error, into: &buf)
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTransactionStatus_lift(_ buf: RustBuffer) throws -> TransactionStatus {
+    return try FfiConverterTypeTransactionStatus.lift(buf)
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTransactionStatus_lower(_ value: TransactionStatus) -> RustBuffer {
+    return FfiConverterTypeTransactionStatus.lower(value)
+}
+
 public struct TransferResult {
+    public var requestId: String
     public var txHash: String
     public var fee: String
 
     /// Default memberwise initializers are never public by default, so we
     /// declare one manually.
-    public init(txHash: String, fee: String) {
+    public init(requestId: String, txHash: String, fee: String) {
+        self.requestId = requestId
         self.txHash = txHash
         self.fee = fee
     }
@@ -3997,6 +4530,9 @@ public struct TransferResult {
 
 extension TransferResult: Equatable, Hashable {
     public static func == (lhs: TransferResult, rhs: TransferResult) -> Bool {
+        if lhs.requestId != rhs.requestId {
+            return false
+        }
         if lhs.txHash != rhs.txHash {
             return false
         }
@@ -4007,6 +4543,7 @@ extension TransferResult: Equatable, Hashable {
     }
 
     public func hash(into hasher: inout Hasher) {
+        hasher.combine(requestId)
         hasher.combine(txHash)
         hasher.combine(fee)
     }
@@ -4019,12 +4556,14 @@ public struct FfiConverterTypeTransferResult: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TransferResult {
         return
             try TransferResult(
+                requestId: FfiConverterString.read(from: &buf),
                 txHash: FfiConverterString.read(from: &buf),
                 fee: FfiConverterString.read(from: &buf)
             )
     }
 
     public static func write(_ value: TransferResult, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.requestId, into: &buf)
         FfiConverterString.write(value.txHash, into: &buf)
         FfiConverterString.write(value.fee, into: &buf)
     }
@@ -4045,12 +4584,14 @@ public func FfiConverterTypeTransferResult_lower(_ value: TransferResult) -> Rus
 }
 
 public struct WithdrawResult {
+    public var requestId: String
     public var txHash: String
     public var fee: String
 
     /// Default memberwise initializers are never public by default, so we
     /// declare one manually.
-    public init(txHash: String, fee: String) {
+    public init(requestId: String, txHash: String, fee: String) {
+        self.requestId = requestId
         self.txHash = txHash
         self.fee = fee
     }
@@ -4058,6 +4599,9 @@ public struct WithdrawResult {
 
 extension WithdrawResult: Equatable, Hashable {
     public static func == (lhs: WithdrawResult, rhs: WithdrawResult) -> Bool {
+        if lhs.requestId != rhs.requestId {
+            return false
+        }
         if lhs.txHash != rhs.txHash {
             return false
         }
@@ -4068,6 +4612,7 @@ extension WithdrawResult: Equatable, Hashable {
     }
 
     public func hash(into hasher: inout Hasher) {
+        hasher.combine(requestId)
         hasher.combine(txHash)
         hasher.combine(fee)
     }
@@ -4080,12 +4625,14 @@ public struct FfiConverterTypeWithdrawResult: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WithdrawResult {
         return
             try WithdrawResult(
+                requestId: FfiConverterString.read(from: &buf),
                 txHash: FfiConverterString.read(from: &buf),
                 fee: FfiConverterString.read(from: &buf)
             )
     }
 
     public static func write(_ value: WithdrawResult, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.requestId, into: &buf)
         FfiConverterString.write(value.txHash, into: &buf)
         FfiConverterString.write(value.fee, into: &buf)
     }
@@ -4584,6 +5131,30 @@ extension UnlockMethod: Equatable, Hashable {}
 #if swift(>=5.8)
     @_documentation(visibility: private)
 #endif
+private struct FfiConverterOptionUInt8: FfiConverterRustBuffer {
+    typealias SwiftType = UInt8?
+
+    static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt8.write(value, into: &buf)
+    }
+
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt8.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
 private struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
     typealias SwiftType = UInt32?
 
@@ -4600,6 +5171,54 @@ private struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterUInt32.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+private struct FfiConverterOptionUInt64: FfiConverterRustBuffer {
+    typealias SwiftType = UInt64?
+
+    static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt64.write(value, into: &buf)
+    }
+
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt64.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+private struct FfiConverterOptionDouble: FfiConverterRustBuffer {
+    typealias SwiftType = Double?
+
+    static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterDouble.write(value, into: &buf)
+    }
+
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterDouble.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -4898,6 +5517,31 @@ private struct FfiConverterSequenceTypeTransaction: FfiConverterRustBuffer {
     }
 }
 
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+private struct FfiConverterSequenceTypeTransactionLog: FfiConverterRustBuffer {
+    typealias SwiftType = [TransactionLog]
+
+    static func write(_ value: [TransactionLog], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeTransactionLog.write(item, into: &buf)
+        }
+    }
+
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [TransactionLog] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [TransactionLog]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            try seq.append(FfiConverterTypeTransactionLog.read(from: &buf))
+        }
+        return seq
+    }
+}
+
 private let UNIFFI_RUST_FUTURE_POLL_READY: Int8 = 0
 private let UNIFFI_RUST_FUTURE_POLL_MAYBE_READY: Int8 = 1
 
@@ -5108,6 +5752,9 @@ private var initializationResult: InitializationResult = {
     if uniffi_privacy_boost_ios_checksum_method_privacyboost_get_balance() != 20248 {
         return InitializationResult.apiChecksumMismatch
     }
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_get_deposit_status() != 17829 {
+        return InitializationResult.apiChecksumMismatch
+    }
     if uniffi_privacy_boost_ios_checksum_method_privacyboost_get_fees() != 21839 {
         return InitializationResult.apiChecksumMismatch
     }
@@ -5123,7 +5770,13 @@ private var initializationResult: InitializationResult = {
     if uniffi_privacy_boost_ios_checksum_method_privacyboost_get_transaction_history() != 37968 {
         return InitializationResult.apiChecksumMismatch
     }
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_get_transfer_status() != 23971 {
+        return InitializationResult.apiChecksumMismatch
+    }
     if uniffi_privacy_boost_ios_checksum_method_privacyboost_get_wallet_address() != 56394 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_privacyboost_get_withdrawal_status() != 63918 {
         return InitializationResult.apiChecksumMismatch
     }
     if uniffi_privacy_boost_ios_checksum_method_privacyboost_import_session() != 21031 {
@@ -5184,6 +5837,9 @@ private var initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if uniffi_privacy_boost_ios_checksum_method_walletdelegate_sign_typed_data() != 41169 {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if uniffi_privacy_boost_ios_checksum_method_walletdelegate_wait_for_transaction_receipt() != 51834 {
         return InitializationResult.apiChecksumMismatch
     }
     if uniffi_privacy_boost_ios_checksum_constructor_privacyboost_new() != 50540 {
