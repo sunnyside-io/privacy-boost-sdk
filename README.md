@@ -22,8 +22,8 @@ Download the latest binary for your platform from the [Releases](https://github.
 
 | Platform | Architecture | Download |
 |----------|-------------|----------|
-| Linux | x64 | [privacy-boost-linux-x64.tar.gz](https://github.com/testinprod-io/privacy-boost-sdk/releases/download/v0.2.8/privacy-boost-linux-x64.tar.gz) |
-| Linux | arm64 | [privacy-boost-linux-arm64.tar.gz](https://github.com/testinprod-io/privacy-boost-sdk/releases/download/v0.2.8/privacy-boost-linux-arm64.tar.gz) |
-| macOS | x64 | [privacy-boost-darwin-x64.tar.gz](https://github.com/testinprod-io/privacy-boost-sdk/releases/download/v0.2.8/privacy-boost-darwin-x64.tar.gz) |
-| macOS | arm64 | [privacy-boost-darwin-arm64.tar.gz](https://github.com/testinprod-io/privacy-boost-sdk/releases/download/v0.2.8/privacy-boost-darwin-arm64.tar.gz) |
-| Windows | x64 | [privacy-boost-windows-x64.zip](https://github.com/testinprod-io/privacy-boost-sdk/releases/download/v0.2.8/privacy-boost-windows-x64.zip) |
+| Linux | x64 | [privacy-boost-linux-x64.tar.gz](https://github.com/testinprod-io/privacy-boost-sdk/releases/download/v0.2.9/privacy-boost-linux-x64.tar.gz) |
+| Linux | arm64 | [privacy-boost-linux-arm64.tar.gz](https://github.com/testinprod-io/privacy-boost-sdk/releases/download/v0.2.9/privacy-boost-linux-arm64.tar.gz) |
+| macOS | x64 | [privacy-boost-darwin-x64.tar.gz](https://github.com/testinprod-io/privacy-boost-sdk/releases/download/v0.2.9/privacy-boost-darwin-x64.tar.gz) |
+| macOS | arm64 | [privacy-boost-darwin-arm64.tar.gz](https://github.com/testinprod-io/privacy-boost-sdk/releases/download/v0.2.9/privacy-boost-darwin-arm64.tar.gz) |
+| Windows | x64 | [privacy-boost-windows-x64.zip](https://github.com/testinprod-io/privacy-boost-sdk/releases/download/v0.2.9/privacy-boost-windows-x64.zip) |
