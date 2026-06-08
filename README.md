@@ -6,9 +6,9 @@ Cross-platform SDK for integrating the PrivacyBoost privacy protocol into web, m
 
 | Platform | Package | Version |
 |----------|---------|---------|
-| TypeScript / Web | [`@sunnyside-io/privacy-boost`](https://www.npmjs.com/package/@sunnyside-io/privacy-boost) | 1.0.1 |
-| React | [`@sunnyside-io/privacy-boost-react`](https://www.npmjs.com/package/@sunnyside-io/privacy-boost-react) | 1.0.1 |
-| CLI | Prebuilt binary | 1.0.1 |
+| TypeScript / Web | [`@sunnyside-io/privacy-boost`](https://www.npmjs.com/package/@sunnyside-io/privacy-boost) | 1.0.3 |
+| React | [`@sunnyside-io/privacy-boost-react`](https://www.npmjs.com/package/@sunnyside-io/privacy-boost-react) | 1.0.3 |
+| CLI | Prebuilt binary | 1.0.3 |
 
 ## Install
 
