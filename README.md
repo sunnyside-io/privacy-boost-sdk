@@ -6,9 +6,12 @@ Cross-platform SDK for integrating the PrivacyBoost privacy protocol into web, m
 
 | Platform | Package | Version |
 |----------|---------|---------|
-| TypeScript / Web | [`@sunnyside-io/privacy-boost`](https://www.npmjs.com/package/@sunnyside-io/privacy-boost) | 1.0.4 |
-| React | [`@sunnyside-io/privacy-boost-react`](https://www.npmjs.com/package/@sunnyside-io/privacy-boost-react) | 1.0.4 |
-| CLI | Prebuilt binary | 1.0.4 |
+| TypeScript / Web | [`@sunnyside-io/privacy-boost`](https://www.npmjs.com/package/@sunnyside-io/privacy-boost) | 1.0.5 |
+| React | [`@sunnyside-io/privacy-boost-react`](https://www.npmjs.com/package/@sunnyside-io/privacy-boost-react) | 1.0.5 |
+| React Native | [`@sunnyside-io/privacy-boost-react-native`](https://www.npmjs.com/package/@sunnyside-io/privacy-boost-react-native) | 1.0.5 |
+| iOS (Swift) | XCFramework (release asset) | 1.0.5 |
+| Android (Kotlin) | AAR (release asset) | 1.0.5 |
+| CLI | Prebuilt binary | 1.0.5 |
 
 ## Install
 
@@ -25,6 +28,26 @@ npm install @sunnyside-io/privacy-boost-react @sunnyside-io/privacy-boost
 ```
 
 Requires React 18 or 19.
+
+### React Native
+
+```bash
+npm install @sunnyside-io/privacy-boost-react-native
+```
+
+Requires React Native 0.74+. The package ships prebuilt native
+bindings for iOS and Android — run `pod install` in your iOS project
+after installing.
+
+### iOS (Swift) / Android (Kotlin)
+
+For native (non-React-Native) apps, download the platform SDK from
+[Releases](https://github.com/sunnyside-io/privacy-boost-sdk/releases):
+
+| Platform | Asset |
+|----------|-------|
+| iOS | `PrivacyBoost-iOS.zip` (XCFramework + Swift package) |
+| Android | `PrivacyBoost-Android.zip` (AAR + Kotlin bindings) |
 
 ### CLI
 
