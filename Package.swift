@@ -4,13 +4,17 @@ import PackageDescription
 let package = Package(
     name: "PrivacyBoost",
     platforms: [
-        .iOS(.v13),
-        .macOS(.v10_15)
+        .iOS(.v16),
+        .macOS(.v13)
     ],
     products: [
         .library(
             name: "PrivacyBoost",
             targets: ["PrivacyBoost", "PrivacyBoostFFI"]
+        ),
+        .library(
+            name: "PrivacyBoostDefaults",
+            targets: ["PrivacyBoostDefaults"]
         ),
     ],
     targets: [
@@ -19,10 +23,15 @@ let package = Package(
             dependencies: ["PrivacyBoostFFI"],
             path: "Sources/PrivacyBoost"
         ),
-          .binaryTarget(
-              name: "PrivacyBoostFFI",
-              url: "https://github.com/testinprod-io/privacy-boost-sdk/releases/download/v0.2.3/PrivacyBoostFFI.xcframework.zip",
-              checksum: "d10f5913d0c7b708e2941215b4a77a12f82575662808f61d234974893065f5ef"
-          ),
+        .target(
+            name: "PrivacyBoostDefaults",
+            dependencies: ["PrivacyBoost"],
+            path: "Sources/PrivacyBoostDefaults"
+        ),
+        .binaryTarget(
+            name: "PrivacyBoostFFI",
+            url: "https://github.com/sunnyside-io/privacy-boost-sdk/releases/download/v1.0.5/PrivacyBoostFFI.xcframework.zip",
+            checksum: "be16219a17e9b9e543af0aecb130b3f951b93441c64a9bfea23e539720b6f16a"
+        ),
     ]
 )
