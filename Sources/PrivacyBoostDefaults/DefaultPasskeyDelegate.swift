@@ -7,33 +7,28 @@ import PrivacyBoost
 ///
 /// Uses ASAuthorization APIs for WebAuthn passkey operations (iOS 16+).
 ///
-/// IMPORTANT — passkey-protected vaults are NOT supported on iOS in 1.0.
-/// iOS does not expose the WebAuthn PRF / `hmac-secret` extension, so there
-/// is no way to obtain a stable, high-entropy secret bound to the credential.
-/// `getAssertion` below falls back to deriving a key from the assertion's
-/// ECDSA/P-256 signature, but that signature is NON-deterministic: ECDSA
-/// signing draws a fresh random nonce `k` on every call, so the signature —
-/// and therefore the derived key — changes on each unlock. This is NOT a
-/// valid PRF. A vault encrypted with one derivation can never be decrypted by
-/// the next, and the key is not portable to the web (which uses the real PRF
-/// extension). Selecting `UnlockMethod.passkey` on iOS is gated off in the
-/// SDK and returns a typed error; this delegate is retained only as a
-/// reference for a future iOS PRF capability.
+/// IMPORTANT: passkey-protected vaults are NOT supported on iOS. iOS does not
+/// expose the WebAuthn PRF / `hmac-secret` extension, so `getAssertion` falls
+/// back to deriving a key from the assertion's ECDSA/P-256 signature. ECDSA
+/// draws a fresh random nonce on every signature, so the derived key changes
+/// on each unlock: it is NOT a valid PRF, a vault sealed with one derivation
+/// can never be reopened by the next, and the key is not portable to the web
+/// (which uses the real PRF extension). The SDK rejects `UnlockMethod.passkey`
+/// on iOS with a typed error; this delegate is kept only as a reference for a
+/// future iOS PRF capability.
 ///
 /// Usage:
 /// ```swift
 /// if #available(iOS 16.0, *) {
-///     let delegate = DefaultPasskeyDelegate(rpId: "myapp.com")
+///     let delegate = DefaultPasskeyDelegate()
 /// }
 /// ```
 @available(iOS 16.0, macOS 13.0, *)
 public class DefaultPasskeyDelegate: NSObject, PasskeyDelegate, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
 
-    private let rpId: String
     private var continuation: CheckedContinuation<Any, Error>?
 
-    public init(rpId: String) {
-        self.rpId = rpId
+    public override init() {
         super.init()
     }
 
@@ -71,11 +66,7 @@ public class DefaultPasskeyDelegate: NSObject, PasskeyDelegate, ASAuthorizationC
 
         let credential: ASAuthorizationPlatformPublicKeyCredentialAssertion = try await performRequest(request)
 
-        // iOS does not support the WebAuthn PRF extension. The fallback below
-        // derives a key from the assertion signature, but ECDSA signatures are
-        // NON-deterministic (fresh random nonce per signing), so this output is
-        // NOT reproducible and NOT a valid PRF. The SDK gates passkey unlock off
-        // on iOS for exactly this reason — see the type-level note above.
+        // Not a valid PRF: the output is not reproducible. See the type-level note.
         guard let signature = credential.signature else {
             throw SdkError.InternalError(message: "Passkey assertion missing signature")
         }
@@ -135,16 +126,12 @@ public class DefaultPasskeyDelegate: NSObject, PasskeyDelegate, ASAuthorizationC
         }
     }
 
-    /// Derive a 32-byte output from a passkey assertion signature.
+    /// Derive a 32-byte output from a passkey assertion signature via
+    /// HKDF-SHA256.
     ///
-    /// WARNING: this is NOT a PRF and the output is NOT deterministic. iOS does
-    /// not support the WebAuthn PRF / `hmac-secret` extension, so there is no
-    /// stable secret to derive from. We run HKDF-SHA256 over the assertion
-    /// signature, but the underlying ECDSA/P-256 signature embeds a fresh random
-    /// nonce on every signing operation, so the same credential and salt yield a
-    /// DIFFERENT signature — and therefore a different key — on each call. A
-    /// vault sealed with one derivation cannot be reopened by the next. This
-    /// method exists only as a placeholder; passkey unlock is disabled on iOS.
+    /// WARNING: this is NOT a PRF and the output is NOT deterministic; the same
+    /// credential and salt yield a different key on each call (see the
+    /// type-level note). Passkey unlock is disabled on iOS.
     ///
     /// Left `internal` (not `private`) so the determinism guard test can exercise
     /// this exact code via `@testable import` rather than a drifting copy.

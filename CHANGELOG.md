@@ -21,13 +21,43 @@ release.
 Before 0.2.19 the npm packages were published as `@testinprod-io/privacy-boost`
 and `@testinprod-io/privacy-boost-react`.
 
+## [1.3.1] - 2026-10-26
+
+**Platforms:** TypeScript, React, React Native, iOS, Android, CLI
+
+First React Native release since 1.0.5: these platforms also get the changes listed under the versions in between.
+
+### Breaking changes
+
+- `GATEWAY_PAIR_DISABLED` (HTTP 409, not retryable) now identifies admin-disabled
+  1inch pairs: quotes previously returned `GATEWAY_ACTION_DISABLED` (409), and
+  submissions returned `GATEWAY_TOKEN_MISMATCH` (400). Handle the new code in
+  both quote and submission error branches.
+
+### Added
+
+- **TypeScript:** `vault.getRegisteredTokens({ forceRefresh: true })` reloads
+  current swap pair policy, bypassing cached and older in-flight reads in the
+  SDK and server. Older responses cannot overwrite the refreshed catalog;
+  calls without this option retain their cached behavior.
+
+### Security
+
+- secp256k1 signing and key handling now run on `k256` 0.14, whose arithmetic
+  fixes timing side channels in operations meant to be constant-time
+  (RUSTSEC-2026-0387).
+- **TypeScript:** The SDK now depends on `zod` 4 instead of 3, which clears the
+  `npm audit` finding for GHSA-mrhx-c7xc-m3w5.
+
 ## [1.3.0] - 2026-10-21
 
-**Platforms:** TypeScript, React
+**Platforms:** TypeScript, React, iOS, Android, CLI
+
+First iOS and Android release since 1.0.5: these platforms also get the changes listed under the versions in between.
 
 The default iframe vault URL is now `/v17/vault.html`; apps that pin
-`iframeUrl` must move to it. The CLI, iOS, Android and React Native entries
-below ship with those platforms' next release.
+`iframeUrl` must move to it. The React Native entries below ship with its next
+release.
 
 ### Breaking changes
 
