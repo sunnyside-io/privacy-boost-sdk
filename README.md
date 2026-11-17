@@ -8,12 +8,12 @@ This repository publishes the SDK's builds: the Swift package, the iOS and Andro
 
 | Platform | Package | Version |
 |----------|---------|---------|
-| TypeScript / Web | [`@sunnyside-io/privacy-boost`](https://www.npmjs.com/package/@sunnyside-io/privacy-boost) | 1.3.1 |
-| React | [`@sunnyside-io/privacy-boost-react`](https://www.npmjs.com/package/@sunnyside-io/privacy-boost-react) | 1.3.1 |
+| TypeScript / Web | [`@sunnyside-io/privacy-boost`](https://www.npmjs.com/package/@sunnyside-io/privacy-boost) | 1.3.2 |
+| React | [`@sunnyside-io/privacy-boost-react`](https://www.npmjs.com/package/@sunnyside-io/privacy-boost-react) | 1.3.2 |
 | React Native | [`@sunnyside-io/privacy-boost-react-native`](https://www.npmjs.com/package/@sunnyside-io/privacy-boost-react-native) | 1.3.1 |
 | iOS (Swift) | Swift package in this repository, or `PrivacyBoost-iOS.zip` | 1.3.1 |
 | Android (Kotlin) | `PrivacyBoost-Android.zip` | 1.3.1 |
-| CLI | Prebuilt binaries | 1.3.1 |
+| CLI | Prebuilt binaries | 1.3.2 |
 
 All platforms share one version line, but a release can ship only some of them, so their latest versions can differ. Prereleases are published to npm under the `beta` dist-tag and marked as pre-releases here.
 

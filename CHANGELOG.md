@@ -21,6 +21,87 @@ release.
 Before 0.2.19 the npm packages were published as `@testinprod-io/privacy-boost`
 and `@testinprod-io/privacy-boost-react`.
 
+## [1.3.2] - 2026-11-17
+
+**Platforms:** TypeScript, React, CLI
+
+### Breaking changes
+
+- A spend submit that failed after the server may have accepted it is no
+  longer retryable, since the payment may still go out. That covers
+  `NETWORK_ERROR`, `TIMEOUT`, a reply that didn't decrypt, decode or fit the
+  size cap (a 2xx included), and a 5xx the server didn't mark retryable, such
+  as `TRANSFER_SUBMISSION_FAILED`. A connection that never opened is still a
+  retryable `NETWORK_ERROR`. In Rust, `Error::is_outcome_unknown()` identifies
+  it; iOS, Android and React Native get a non-retryable `ApiError` instead of
+  `NetworkError` or the server's error type, and the CLI exits 1 instead of 3.
+- A spend that falls short only because this device holds some of its notes,
+  for a spend still in flight or a prepared withdrawal, now fails with the
+  retryable `NOTES_RESERVED` (`Error::NotesReserved` in Rust) instead of
+  `INSUFFICIENT_BALANCE`. `retryAfterMs` says when the notes are free again,
+  and is absent while a spend is still in flight. A real shortfall is still
+  `INSUFFICIENT_BALANCE`.
+
+### Added
+
+- **TypeScript:** `vault.prepareWithdrawal()` builds and signs a withdrawal without submitting
+  it, and returns a sealed package plus the request id it will get. Your
+  backend submits the package with its server credentials
+  (`POST /api/v1/server/withdrawals`) and tracks it with
+  `GET /api/v1/server/requests/{requestId}`, so the request id never has to
+  come back through the browser. Packages expire about two minutes after
+  they're prepared, and the server must report `withdrawalPackages` in `/info`.
+- **TypeScript:** `campaigns.getStartaleProgress(window)` takes an optional
+  campaign window (`tokenId`, `from`, `to`, and optionally
+  `shieldThresholdTokens` and `holdDays`) and returns the user's standing in it
+  as `campaign`, with `hasShielded`, `hasTransferred`, `hasHeld` and
+  `qualified`, plus `holdingSince` — when the current run began — while a hold
+  is still running. A server without campaign windows makes the call reject
+  with `INVALID_INPUT`.
+- **TypeScript:** `PrivacyBoostError.outcomeUnknown` marks such a submit,
+  including one the iframe vault stopped answering. Needs vault host `/v18/`.
+  The tracked transaction is marked `failed` with `outcomeUnknown: true`.
+- **TypeScript:** `fetchHistory({ includeRequestIds: true })` sets
+  `requestId` on a history row's outgoing notes that one of your own completed
+  transfers or withdrawals spent, and on the row when they all name the same
+  request.
+
+### Changed
+
+- **TypeScript:** some requests that run out their timeout now fail with
+  `TIMEOUT` instead of `NETWORK_ERROR`, and others still report
+  `NETWORK_ERROR`. Handle both as retryable network failures, except on a
+  spend submit (see Breaking changes).
+- **TypeScript:** A failed `sdk.gifts` funding, claim or refund carries its
+  SDK error code (for example `NETWORK_ERROR` or `GIFT_NOT_FOUND`) instead of
+  `ERROR`.
+- Spend submits wait at least 120 seconds for the server's answer, even when
+  `timeoutMs` is shorter (30 seconds by default outside the iframe vault).
+
+### Fixed
+
+- **TypeScript:** When `vault.reconcilePendingApprovals()` runs its host-side
+  fallback and a submit finds the approval already consumed, the `consumed`
+  entry now carries the consuming `requestId`, as the native reconcile did.
+- A wallet-bound gift funding that fails with an unknown outcome now keeps the
+  gift's refund record instead of dropping it, so its `blind` survives if the
+  funding landed. Read it from `gifts.records()` (`getGiftRecords()` on
+  mobile; the CLI saves it to the session file) and persist it like a returned
+  `giftRecord`. Its `requestId` is empty, so `status` and `refundByRecord`
+  can't locate it; refund it with `refund` and its funding location.
+- **CLI:** A shield of native ETH, or any send that follows the CLI's own wrap
+  or approve, no longer fails with `Transaction would revert (gas estimation)`
+  when a load-balanced RPC answers the estimate from a node that hasn't seen
+  that transaction yet. The estimate is retried for up to 6 seconds.
+
+### Security
+
+- secp256k1 signing and key handling now run on `k256` 0.14, whose arithmetic
+  fixes timing side channels in operations meant to be constant-time
+  (RUSTSEC-2026-0387).
+- **TypeScript:** The SDK now depends on `zod` 4 instead of 3, which clears the
+  `npm audit` finding for GHSA-mrhx-c7xc-m3w5.
+
 ## [1.3.1] - 2026-10-26
 
 **Platforms:** TypeScript, React, React Native, iOS, Android, CLI
@@ -40,14 +121,6 @@ First React Native release since 1.0.5: these platforms also get the changes lis
   current swap pair policy, bypassing cached and older in-flight reads in the
   SDK and server. Older responses cannot overwrite the refreshed catalog;
   calls without this option retain their cached behavior.
-
-### Security
-
-- secp256k1 signing and key handling now run on `k256` 0.14, whose arithmetic
-  fixes timing side channels in operations meant to be constant-time
-  (RUSTSEC-2026-0387).
-- **TypeScript:** The SDK now depends on `zod` 4 instead of 3, which clears the
-  `npm audit` finding for GHSA-mrhx-c7xc-m3w5.
 
 ## [1.3.0] - 2026-10-21
 
