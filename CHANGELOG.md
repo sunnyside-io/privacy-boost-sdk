@@ -21,6 +21,83 @@ release.
 Before 0.2.19 the npm packages were published as `@testinprod-io/privacy-boost`
 and `@testinprod-io/privacy-boost-react`.
 
+## [1.3.3] - 2026-11-18
+
+**Platforms:** TypeScript, React, React Native, iOS, Android, CLI
+
+First React Native, iOS and Android release since 1.3.1: these platforms also get the changes listed under the versions in between.
+
+### Breaking changes
+
+- **Rust:** `TransferParams`, `UnshieldParams` and
+  `Error::SubmitOutcomeUnknown` have a `submission_key` field,
+  `ServerInfoResponse` has `submission_keys`, and `ErrorDetails` has
+  `existing_request_id`. A spend with a `submission_key` fails with
+  `INVALID_INPUT` before it's sent unless the server's `/info` reports
+  `submissionKeys`.
+
+### Added
+
+- **TypeScript:** `auth.signIn(adapter, { recoveryPhrase: { allowLater: true } })`
+  adds "Back up later" to the iframe vault's new-user phrase screen. The
+  account is created, and every sign-in to it reports `backupPending: true`
+  until `auth.revealRecoveryPhrase()` returns `confirmed` (only the deferring
+  sign-in does when the vault keeps neither its vault nor its session on the
+  device). Needs vault host `/v20/`.
+- **TypeScript:** When the server refuses the session's token (HTTP 401), the
+  SDK signs the session out, saved session included, and emits
+  `sessionExpired` once with reason `'unauthorized'` and `authFailure`, or
+  `'jwt_expired'` when the server says the token expired (servers that send
+  `details.reason` on a 401). A refusal of a request sent before the latest
+  sign-in is ignored, and so is a 401 whose `details.reason` the SDK doesn't
+  know. Vault operations need vault host `/v20/`.
+- **TypeScript:** `submissionKey` on `vault.send`, `sendBatch` and `unshield`
+  (and React's `useVault()`) names the attempt. After an `outcomeUnknown`
+  failure, which reports it as `PrivacyBoostError.submissionKey`, call
+  `sdk.transactions.getSubmission(key)` first and resubmit with the same key
+  only on `found: false`; the server then answers a duplicate with the first
+  request instead of paying again. A refusal of that resubmit before it's sent
+  (`INSUFFICIENT_BALANCE`, say) can mean the first attempt just landed, so
+  look it up again. The key keeps one tracked transaction: a call answered
+  with a request another call already tracks returns that call's `txHash`
+  (with `unwrapWeth`, it shares that call's unwrap rather than sending
+  another), and `getSubmission` hands the request it finds to the
+  transaction a failed attempt left, which takes the status found or settles
+  like any other. A lookup doesn't unwrap WETH: when it finds an `unshield`
+  sent with `unwrapWeth`, call `vault.unwrapWeth()` once that completes. A
+  server reply of `SUBMISSION_STATUS_UNKNOWN` is outcome unknown too.
+  `PrivacyBoostError.existingRequestId` names your own request a refused spend
+  collided with (`NULLIFIER_ALREADY_USED`, and the new `SUBMISSION_FAILED` and
+  `SUBMISSION_KEY_REUSED`), and `ErrorCodes` has the server's `SUBMISSION_*`
+  codes. A keyed spend fails with `UNSUPPORTED_OPERATION` before it's sent
+  unless the server's `getServerInfo()` reports `submissionKeys` and, with the
+  iframe vault, the host acknowledges them (vault host `/v21/`).
+
+### Changed
+
+- **TypeScript:** Resuming a saved session for the same wallet under the
+  iframe key vault fails with the new retryable `RESTORE_TIMEOUT` after 60
+  seconds of vault work (wallet popups and prompts don't count) instead of
+  waiting up to 30 minutes. The vault keeps going: a retry waits on the same
+  restore, and a restore that finishes later still signs the user in, which
+  `authChange` reports, unless they signed out or signed in again meanwhile.
+- A failed `/api/v1/info` discovery that the server answered, such as
+  `RATE_LIMITED`, fails with that code and its `retryAfterMs` instead of
+  `NETWORK_ERROR`.
+- A sign-in the server refuses with a 401 at `/auth/login`, `/auth/upgrade`
+  or `/auth/token` fails with `AUTHENTICATION_FAILED` instead of the server's
+  `UNAUTHORIZED`, so it isn't taken for a refused session. iOS, Android and
+  React Native get `AuthenticationFailed` instead of `NotAuthenticated`. A
+  401 at `/auth/upgrade` that refuses the session's token (one whose
+  `details.reason` is `missing`, `expired`, `invalid` or `wrong_deployment`)
+  stays `UNAUTHORIZED` (`NotAuthenticated` on mobile), and TypeScript signs
+  the session out.
+
+### Fixed
+
+- Sign-in no longer restores a saved session whose token was issued for
+  another pool after a redeploy; it asks for a signature and saves over it.
+
 ## [1.3.2] - 2026-11-17
 
 **Platforms:** TypeScript, React, CLI

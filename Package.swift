@@ -30,8 +30,8 @@ let package = Package(
         ),
         .binaryTarget(
             name: "PrivacyBoostFFI",
-            url: "https://github.com/sunnyside-io/privacy-boost-sdk/releases/download/v1.3.1/PrivacyBoostFFI.xcframework.zip",
-            checksum: "dda5175337335faee1c02a5da4856a03cf9d5e6d1ce9b549583127727c77cf16"
+            url: "https://github.com/sunnyside-io/privacy-boost-sdk/releases/download/v1.3.3/PrivacyBoostFFI.xcframework.zip",
+            checksum: "f150e62082d28126e2a36b2d594873ddc204e4b004bbf5f8b38ca21584ba9f2b"
         ),
     ]
 )

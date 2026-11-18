@@ -8,12 +8,12 @@ This repository publishes the SDK's builds: the Swift package, the iOS and Andro
 
 | Platform | Package | Version |
 |----------|---------|---------|
-| TypeScript / Web | [`@sunnyside-io/privacy-boost`](https://www.npmjs.com/package/@sunnyside-io/privacy-boost) | 1.3.2 |
-| React | [`@sunnyside-io/privacy-boost-react`](https://www.npmjs.com/package/@sunnyside-io/privacy-boost-react) | 1.3.2 |
-| React Native | [`@sunnyside-io/privacy-boost-react-native`](https://www.npmjs.com/package/@sunnyside-io/privacy-boost-react-native) | 1.3.1 |
-| iOS (Swift) | Swift package in this repository, or `PrivacyBoost-iOS.zip` | 1.3.1 |
-| Android (Kotlin) | `PrivacyBoost-Android.zip` | 1.3.1 |
-| CLI | Prebuilt binaries | 1.3.2 |
+| TypeScript / Web | [`@sunnyside-io/privacy-boost`](https://www.npmjs.com/package/@sunnyside-io/privacy-boost) | 1.3.3 |
+| React | [`@sunnyside-io/privacy-boost-react`](https://www.npmjs.com/package/@sunnyside-io/privacy-boost-react) | 1.3.3 |
+| React Native | [`@sunnyside-io/privacy-boost-react-native`](https://www.npmjs.com/package/@sunnyside-io/privacy-boost-react-native) | 1.3.3 |
+| iOS (Swift) | Swift package in this repository, or `PrivacyBoost-iOS.zip` | 1.3.3 |
+| Android (Kotlin) | `PrivacyBoost-Android.zip` | 1.3.3 |
+| CLI | Prebuilt binaries | 1.3.3 |
 
 All platforms share one version line, but a release can ship only some of them, so their latest versions can differ. Prereleases are published to npm under the `beta` dist-tag and marked as pre-releases here.
 
@@ -43,11 +43,11 @@ Requires React Native 0.74+. The package ships prebuilt native bindings for iOS 
 
 ### iOS (Swift Package Manager)
 
-In Xcode, choose **File → Add Package Dependencies…**, enter `https://github.com/sunnyside-io/privacy-boost-sdk`, and pick **Up to Next Major Version** from 1.3.1. Or add it to `Package.swift`:
+In Xcode, choose **File → Add Package Dependencies…**, enter `https://github.com/sunnyside-io/privacy-boost-sdk`, and pick **Up to Next Major Version** from 1.3.3. Or add it to `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/sunnyside-io/privacy-boost-sdk", from: "1.3.1"),
+    .package(url: "https://github.com/sunnyside-io/privacy-boost-sdk", from: "1.3.3"),
 ],
 targets: [
     .target(
